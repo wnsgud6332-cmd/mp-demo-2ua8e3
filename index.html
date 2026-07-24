@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>MyAIPet 데모 v10</title>
+<style>
+  :root{
+    --ink:#1a1f2b;
+    --paper:#fff9f0;
+    --blue-glow:#4fd7ff;
+    --blue-deep:#0d6fa8;
+    --amber:#ffb15c;
+    --card:#ffffffcc;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;font-family:"Apple SD Gothic Neo","Malgun Gothic",sans-serif;background:#0b0f18;overflow:hidden;}
+  #app{position:relative;width:100%;height:100vh;height:100dvh;max-width:480px;margin:0 auto;overflow:hidden;box-shadow:0 0 40px rgba(0,0,0,.6);display:flex;flex-direction:column;}
+
+  /* ---------- Scene backgrounds ---------- */
+  #scene{position:absolute;inset:0;transition:background 1.2s ease;z-index:0;}
+  #scene.hill{background:linear-gradient(180deg,#2b1b3a 0%,#7a3b52 28%,#e8703a 52%,#f6b551 68%,#3a2a1f 100%);}
+  #scene.hill::before{content:"";position:absolute;left:0;right:0;bottom:0;height:38%;
+    background:
+      radial-gradient(60px 60px at 78% 10%, #fff3cf 0%, rgba(255,243,207,.0) 70%),
+      linear-gradient(180deg, transparent 0%, #1c1310 100%);
+    clip-path: polygon(0 60%, 15% 45%, 30% 55%, 48% 35%, 65% 50%, 82% 30%, 100% 48%, 100% 100%, 0 100%);
+    background-color:#241a26;}
+  #scene.city{background:linear-gradient(180deg,#0a0e22 0%,#141a38 45%,#241c3d 100%);}
+  #scene.city::before{content:"";position:absolute;left:0;right:0;bottom:0;height:34%;background-color:#0c1024;
+    clip-path:polygon(0 100%,0 55%,8% 55%,8% 40%,16% 40%,16% 60%,26% 60%,26% 30%,34% 30%,34% 65%,44% 65%,44% 45%,54% 45%,54% 70%,64% 70%,64% 35%,74% 35%,74% 58%,84% 58%,84% 42%,94% 42%,94% 68%,100% 68%,100% 100%);}
+  #scene.city::after{content:"";position:absolute;inset:0;background:
+      radial-gradient(2px 2px at 20% 15%, #fff, transparent 60%),
+      radial-gradient(2px 2px at 60% 8%, #fff, transparent 60%),
+      radial-gradient(1.5px 1.5px at 40% 20%, #fff, transparent 60%),
+      radial-gradient(1.5px 1.5px at 80% 12%, #fff, transparent 60%),
+      radial-gradient(2px 2px at 90% 25%, #fff, transparent 60%);
+    opacity:.7;}
+  #scene.room{background:linear-gradient(180deg,#3a2a22 0%,#5a3f2e 40%,#8a6142 100%);}
+  #scene.room::before{content:"";position:absolute;left:8%;top:10%;width:34%;height:40%;background:linear-gradient(160deg,#ffd88a,#ffb15c);border-radius:6px;opacity:.55;filter:blur(1px);}
+
+  /* ---------- Header ---------- */
+  #header{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:10px 14px 6px;color:#fff;}
+  #header .brand{font-weight:700;font-size:15px;letter-spacing:.3px;display:flex;align-items:center;gap:6px;}
+  #header .brand .dot{width:7px;height:7px;border-radius:50%;background:var(--blue-glow);box-shadow:0 0 8px var(--blue-glow);}
+  #levelWrap{display:flex;align-items:center;gap:8px;}
+  #levelBadge{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;}
+  #expBarOuter{width:70px;height:6px;background:rgba(255,255,255,.18);border-radius:4px;overflow:hidden;}
+  #expBarInner{height:100%;width:0%;background:linear-gradient(90deg,#4fd7ff,#7bffb0);transition:width .5s ease;}
+
+  /* ---------- Pet stage ---------- */
+  #stage{position:relative;z-index:2;flex:0 1 250px;min-height:150px;display:flex;align-items:flex-end;justify-content:center;}
+  #petSvgWrap{width:64%;max-width:230px;transform-origin:bottom center;transition:transform .6s cubic-bezier(.34,1.56,.64,1);}
+  #bubble{position:absolute;top:2%;background:var(--card);color:var(--ink);padding:8px 13px;border-radius:16px;font-size:13px;max-width:70%;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:0;transition:opacity .3s ease, transform .3s ease;transform:translateY(6px);pointer-events:none;}
+  #bubble::after{content:"";position:absolute;bottom:-7px;left:26px;border:7px solid transparent;border-top-color:var(--card);}
+  #bubble.show{opacity:1;transform:translateY(0);}
+
+  /* ---------- Camera video (AR) ---------- */
+  #camVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:1;}
+
+  /* ---------- Scene switcher ---------- */
+  #sceneBar{position:relative;z-index:5;display:flex;gap:6px;padding:6px 14px;justify-content:center;}
+  .sceneBtn{flex:1;max-width:88px;font-size:11px;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:6px 4px;text-align:center;cursor:pointer;}
+  .sceneBtn.active{background:rgba(79,215,255,.28);border-color:var(--blue-glow);}
+
+  /* ---------- Chat panel ---------- */
+  #panel{position:relative;z-index:5;flex:1 1 auto;min-height:0;background:var(--paper);border-radius:22px 22px 0 0;margin-top:-14px;display:flex;flex-direction:column;box-shadow:0 -6px 24px rgba(0,0,0,.35);}
+  #panelHandle{width:36px;height:4px;background:#e2d9c8;border-radius:3px;margin:9px auto 4px;}
+  #tabs{display:flex;gap:6px;padding:0 14px 6px;}
+  .tabBtn{font-size:12px;padding:5px 10px;border-radius:14px;border:1px solid #e6ddca;background:#fff;color:#7a6a4f;cursor:pointer;}
+  .tabBtn.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  #chatLog{flex:1;min-height:0;overflow-y:auto;padding:6px 14px;display:flex;flex-direction:column;gap:8px;}
+  .msg{max-width:78%;padding:9px 12px;border-radius:14px;font-size:13.5px;line-height:1.45;}
+  .msg.pet{align-self:flex-start;background:#eef4ff;color:#16324f;border-bottom-left-radius:4px;}
+  .msg.user{align-self:flex-end;background:var(--ink);color:#fff;border-bottom-right-radius:4px;}
+  .msg.sys{align-self:center;background:transparent;color:#a8987c;font-size:11px;}
+  #memoryView{display:none;padding:10px 14px;overflow-y:auto;flex:1;}
+  #memoryView .chip{display:inline-block;background:#fff;border:1px solid #e6ddca;border-radius:10px;padding:5px 9px;font-size:12px;margin:3px;color:#4a4030;}
+  #memoryView h4{margin:6px 0 4px;font-size:12px;color:#a8987c;font-weight:600;}
+
+  /* ---------- Relationship panel ---------- */
+  #relationshipView{display:none;padding:14px 16px;overflow-y:auto;flex:1;}
+  #relStageBadge{text-align:center;margin-bottom:14px;}
+  #relStageBadge .name{font-size:19px;font-weight:800;color:#2b2118;}
+  #relStageBadge .desc{font-size:12px;color:#9a8c6f;margin-top:3px;}
+  .relBarRow{margin-bottom:14px;}
+  .relBarRow .lab{display:flex;justify-content:space-between;font-size:12px;color:#7a6a4f;margin-bottom:4px;}
+  .relBarOuter{height:10px;border-radius:6px;background:#efe6d3;overflow:hidden;}
+  .relBarInner{height:100%;border-radius:6px;transition:width .5s ease;}
+  #intimacyBar{background:linear-gradient(90deg,#ff9d76,#ffb15c);}
+  #trustBar{background:linear-gradient(90deg,#4fd7ff,#0d6fa8);}
+  #relStageTrack{display:flex;justify-content:space-between;margin:18px 0 6px;position:relative;}
+  #relStageTrack::before{content:"";position:absolute;left:8%;right:8%;top:9px;height:2px;background:#e6ddca;z-index:0;}
+  .relStageDot{position:relative;z-index:1;flex:1;text-align:center;font-size:10px;color:#b8ab8c;}
+  .relStageDot .dot{width:18px;height:18px;border-radius:50%;background:#efe6d3;border:2px solid #e6ddca;margin:0 auto 4px;}
+  .relStageDot.passed .dot{background:var(--blue-deep);border-color:var(--blue-deep);}
+  .relStageDot.current .dot{background:var(--blue-glow);border-color:var(--blue-deep);box-shadow:0 0 0 4px rgba(79,215,255,.25);}
+  .relStageDot.current{color:#2b2118;font-weight:700;}
+  #relDaysNote{margin-top:14px;font-size:12px;color:#9a8c6f;text-align:center;}
+
+  #relUpFx{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(10,15,25,.55);opacity:0;pointer-events:none;transition:opacity .25s ease;}
+  #relUpFx.show{opacity:1;pointer-events:auto;}
+  #relUpFx #relUpCard{background:#fff;border-radius:18px;padding:22px 28px;text-align:center;transform:scale(.85);transition:transform .3s ease;}
+  #relUpFx.show #relUpCard{transform:scale(1);}
+  #relUpCard .big{font-size:20px;font-weight:800;color:#c9527a;}
+  #relUpCard .small{font-size:12px;color:#888;margin-top:4px;}
+  #inputRow{display:flex;align-items:center;gap:6px;padding:8px 10px 12px;border-top:1px solid #eee3cf;}
+  #micBtn,#ttsBtn{width:36px;height:36px;border-radius:50%;border:1px solid #e6ddca;background:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;}
+  #micBtn.rec{background:#ffdede;border-color:#ff8a8a;}
+  #ttsBtn.on{background:#dff3ff;border-color:var(--blue-deep);}
+  #textInput{flex:1;border:1px solid #e6ddca;border-radius:18px;padding:9px 14px;font-size:13.5px;outline:none;}
+  #sendBtn{width:36px;height:36px;border-radius:50%;border:none;background:var(--ink);color:#fff;font-size:14px;cursor:pointer;flex-shrink:0;}
+
+  /* ---------- Level-up overlay ---------- */
+  #levelUpFx{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:rgba(10,15,25,.55);opacity:0;pointer-events:none;transition:opacity .25s ease;}
+  #levelUpFx.show{opacity:1;pointer-events:auto;}
+  #levelUpCard{background:#fff;border-radius:18px;padding:22px 28px;text-align:center;transform:scale(.85);transition:transform .3s ease;}
+  #levelUpFx.show #levelUpCard{transform:scale(1);}
+  #levelUpCard .big{font-size:22px;font-weight:800;color:var(--blue-deep);}
+  #levelUpCard .small{font-size:12px;color:#888;margin-top:4px;}
+
+  /* ---------- Compat banner ---------- */
+  #compatBanner{position:relative;z-index:50;display:none;background:#3a1f1f;color:#ffdada;font-size:12px;line-height:1.5;padding:9px 14px;gap:8px;align-items:center;justify-content:space-between;}
+  #compatBanner.show{display:flex;}
+  #compatBanner b{color:#ffb1b1;}
+  #compatBanner button{flex-shrink:0;background:#ffdada;color:#3a1f1f;border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;}
+
+  /* ---------- Settings gear ---------- */
+  #gearBtn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:50%;width:28px;height:28px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  #keyBtn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:50%;width:28px;height:28px;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  #keyBtn.set{background:rgba(79,215,255,.28);border-color:var(--blue-glow);}
+
+  #keyModal{position:fixed;inset:0;z-index:90;background:rgba(10,14,24,.72);display:none;align-items:flex-end;justify-content:center;}
+  #keyModal.show{display:flex;}
+  #keyCard{background:var(--paper);width:100%;max-width:480px;border-radius:20px 20px 0 0;padding:16px 18px calc(18px + env(safe-area-inset-bottom,0));}
+  #keyCard h3{margin:0 0 4px;font-size:16px;color:#2b2118;}
+  #keyCard p{margin:0 0 10px;font-size:12.5px;color:#8a7c60;line-height:1.6;}
+  #keyInput{width:100%;border:1px solid #e6ddca;border-radius:12px;padding:11px 13px;font-size:13px;outline:none;margin-bottom:10px;box-sizing:border-box;}
+  #keyRow{display:flex;gap:8px;}
+  #keyRow button{flex:1;border:none;border-radius:12px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;}
+  #keySaveBtn{background:var(--blue-deep);color:#fff;}
+  #keySkipBtn{background:#eee3cf;color:#3a3226;}
+  #keyClearBtn{background:transparent;color:#c0503f;text-decoration:underline;font-size:12px;width:100%;margin-top:10px;border:none;cursor:pointer;padding:4px;}
+
+  /* ---------- Help modal ---------- */
+  #helpModal{position:fixed;inset:0;z-index:80;background:rgba(10,14,24,.72);display:none;align-items:flex-end;justify-content:center;}
+  #helpModal.show{display:flex;}
+  #helpCard{background:var(--paper);width:100%;max-width:480px;border-radius:20px 20px 0 0;max-height:86vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0);}
+  #helpHead{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;}
+  #helpHead .t{font-weight:800;font-size:16px;color:#2b2118;}
+  #helpClose{border:none;background:#eee3cf;color:#4a4030;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;}
+  #helpTabs{display:flex;gap:6px;padding:0 14px 8px;overflow-x:auto;}
+  .helpTabBtn{flex-shrink:0;font-size:12px;padding:6px 11px;border-radius:14px;border:1px solid #e6ddca;background:#fff;color:#7a6a4f;cursor:pointer;white-space:nowrap;}
+  .helpTabBtn.active{background:var(--blue-deep);color:#fff;border-color:var(--blue-deep);}
+  #helpBody{overflow-y:auto;padding:4px 18px 18px;font-size:13.5px;color:#3a3226;line-height:1.7;}
+  #helpBody ol{padding-left:18px;margin:6px 0;}
+  #helpBody li{margin-bottom:6px;}
+  #helpStatus{display:flex;gap:10px;padding:0 18px 10px;}
+  .statPill{flex:1;border:1px solid #e6ddca;border-radius:12px;padding:8px 10px;font-size:12px;text-align:center;background:#fff;}
+  .statPill .lab{color:#a8987c;font-size:11px;margin-bottom:2px;}
+  .statPill .val{font-weight:800;}
+  .statPill.ok .val{color:#2fa876;}
+  .statPill.bad .val{color:#e05a5a;}
+  .statPill.unknown .val{color:#a8987c;}
+  #helpRetryRow{display:flex;gap:8px;padding:0 18px 16px;}
+  #helpRetryRow button{flex:1;border:none;border-radius:12px;padding:11px;font-weight:700;font-size:13px;cursor:pointer;}
+  #retryPermBtn{background:var(--blue-deep);color:#fff;}
+  #openChromeBtn{background:#eee3cf;color:#3a3226;}
+
+  /* ---------- Pet animations ---------- */
+  .blink{transform-box:fill-box;transform-origin:center;animation:blink 4.4s infinite;}
+  @keyframes blink{0%,92%,100%{transform:scaleY(1);} 95%{transform:scaleY(.12);}}
+  .glowPulse{animation:glowPulse 2.6s ease-in-out infinite;}
+  @keyframes glowPulse{0%,100%{opacity:.75;} 50%{opacity:1;}}
+  .sway{animation:sway 3.4s ease-in-out infinite;transform-box:fill-box;transform-origin:30% 90%;}
+  @keyframes sway{0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(4deg);}}
+  .breathe{animation:breathe 3.2s ease-in-out infinite;transform-origin:center bottom;}
+  @keyframes breathe{0%,100%{transform:translateY(0) scale(1);} 50%{transform:translateY(-2px) scale(1.015);}}
+</style>
+</head>
+<body>
+<div id="jsDeadBanner" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#b3261e;color:#fff;padding:10px 14px;font-size:14px;text-align:center;">
+⚠️ 화면이 반응하지 않으면: 이 파일을 <b>Safari(사파리) 브라우저로 열어주세요</b>.<br>iPhone: 파일을 길게 눌러 공유 → Safari / 미리보기에서는 작동하지 않아요.
+</div>
+<noscript><div style="padding:40px 24px;text-align:center;font-family:sans-serif;color:#333;background:#fff9f0;height:100vh;">
+<b style="font-size:18px;">MyAIPet 데모</b><br><br>
+이 화면(미리보기)에서는 실행이 차단되어 있어요.<br>
+파일을 <b>크롬 또는 사파리 브라우저</b>로 열어주세요.<br>
+(아이폰: 파일 앱 미리보기에서는 실행되지 않습니다)
+</div></noscript>
+<div id="app">
+  <div id="compatBanner"><span id="compatBannerText"></span><button id="compatBannerBtn">해결 방법 보기</button></div>
+  <div id="scene" class="hill"></div>
+  <video id="camVideo" autoplay playsinline muted></video>
+
+  <div style="position:relative;z-index:5;display:flex;flex-direction:column;height:100%;">
+    <div id="header">
+      <div class="brand"><span class="dot"></span>MyAIPet</div>
+      <div id="levelWrap">
+        <div id="expBarOuter"><div id="expBarInner"></div></div>
+        <div id="levelBadge">Lv.1</div>
+        <button id="gearBtn" title="카메라·마이크 설정 도움말">⚙</button>
+        <button id="keyBtn" title="Claude API 키 설정">🔑</button>
+      </div>
+    </div>
+
+    <div id="stage">
+      <div id="bubble"></div>
+      <div id="petSvgWrap">
+        <!-- ===================== PET SVG ===================== -->
+        <svg viewBox="0 0 400 430" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="bodyGrad" cx="45%" cy="35%" r="75%">
+              <stop offset="0%" stop-color="#fffdf7"/>
+              <stop offset="70%" stop-color="#f3ecdd"/>
+              <stop offset="100%" stop-color="#e3d9c4"/>
+            </radialGradient>
+            <radialGradient id="eyeGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#bff2ff"/>
+              <stop offset="55%" stop-color="#4fd7ff"/>
+              <stop offset="100%" stop-color="#0d6fa8" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="wingGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#eaf8ff" stop-opacity=".9"/>
+              <stop offset="100%" stop-color="#bfe9ff" stop-opacity=".35"/>
+            </linearGradient>
+            <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+              <feGaussianBlur stdDeviation="4.2" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+
+          <!-- tail -->
+          <g class="sway">
+            <path d="M300,300 C 350,290 372,250 360,205 C 352,178 330,175 322,196 C 316,214 328,232 316,252 C 305,270 285,278 278,300 Z" fill="url(#bodyGrad)"/>
+            <circle cx="325" cy="196" r="11" fill="var(--blue-glow)" class="glowPulse" filter="url(#softGlow)"/>
+          </g>
+
+          <!-- wings / leaf ornaments on back -->
+          <g class="glowPulse" filter="url(#softGlow)">
+            <path d="M170,175 C120,150 88,95 96,55 C120,80 150,95 158,140 C161,155 166,166 170,175 Z" fill="url(#wingGrad)" stroke="#8fd8ee" stroke-width="1.5"/>
+            <path d="M132,120 C118,100 108,78 106,60" stroke="#5fc2e6" stroke-width="1.6" fill="none" opacity=".8"/>
+            <path d="M230,175 C280,150 312,95 304,55 C280,80 250,95 242,140 C239,155 234,166 230,175 Z" fill="url(#wingGrad)" stroke="#8fd8ee" stroke-width="1.5"/>
+            <path d="M268,120 C282,100 292,78 294,60" stroke="#5fc2e6" stroke-width="1.6" fill="none" opacity=".8"/>
+          </g>
+
+          <g class="breathe">
+            <!-- body -->
+            <ellipse cx="200" cy="300" rx="98" ry="88" fill="url(#bodyGrad)"/>
+            <ellipse cx="200" cy="322" rx="54" ry="42" fill="#fffdf8" opacity=".55"/>
+            <!-- chest ring -->
+            <ellipse cx="200" cy="256" rx="26" ry="10" fill="none" stroke="var(--blue-glow)" stroke-width="4" class="glowPulse" filter="url(#softGlow)"/>
+
+            <!-- paws -->
+            <ellipse cx="140" cy="378" rx="26" ry="15" fill="#efe6d3"/>
+            <ellipse cx="260" cy="378" rx="26" ry="15" fill="#efe6d3"/>
+
+            <!-- head group -->
+            <g transform="translate(200,168)">
+              <!-- ears -->
+              <path d="M-46,-18 C-70,-95 -58,-150 -30,-165 C-24,-120 -16,-70 -6,-30 Z" fill="url(#bodyGrad)"/>
+              <path d="M46,-18 C70,-95 58,-150 30,-165 C24,-120 16,-70 6,-30 Z" fill="url(#bodyGrad)"/>
+              <path d="M-42,-30 C-56,-85 -48,-125 -32,-140" fill="none" stroke="#e7dcc4" stroke-width="2" opacity=".7"/>
+              <path d="M42,-30 C56,-85 48,-125 32,-140" fill="none" stroke="#e7dcc4" stroke-width="2" opacity=".7"/>
+              <circle cx="-40" cy="-95" r="15" fill="none" stroke="var(--blue-glow)" stroke-width="3.4" class="glowPulse" filter="url(#softGlow)"/>
+              <circle cx="40" cy="-95" r="15" fill="none" stroke="var(--blue-glow)" stroke-width="3.4" class="glowPulse" filter="url(#softGlow)"/>
+
+              <!-- head base -->
+              <ellipse cx="0" cy="0" rx="82" ry="74" fill="url(#bodyGrad)"/>
+              <ellipse cx="0" cy="30" rx="42" ry="26" fill="#fffdf8" opacity=".7"/>
+
+              <!-- eyes -->
+              <g transform="translate(-30,-4)"><g class="blink">
+                <circle r="17" fill="url(#eyeGlow)" filter="url(#softGlow)"/>
+                <circle r="12" fill="#0c2233"/>
+                <g id="pupilL"><circle r="9.5" fill="var(--blue-glow)"/>
+                <circle r="3.6" cx="-3" cy="-3" fill="#eafcff"/></g>
+              </g></g>
+              <g transform="translate(30,-4)"><g class="blink">
+                <circle r="17" fill="url(#eyeGlow)" filter="url(#softGlow)"/>
+                <circle r="12" fill="#0c2233"/>
+                <g id="pupilR"><circle r="9.5" fill="var(--blue-glow)"/>
+                <circle r="3.6" cx="-3" cy="-3" fill="#eafcff"/></g>
+              </g></g>
+
+              <!-- nose & mouth -->
+              <path d="M-6,34 L6,34 L0,42 Z" fill="#2b2118"/>
+              <path d="M0,42 C0,48 -8,52 -14,49" stroke="#2b2118" stroke-width="2" fill="none" stroke-linecap="round"/>
+              <path d="M0,42 C0,48 8,52 14,49" stroke="#2b2118" stroke-width="2" fill="none" stroke-linecap="round"/>
+            </g>
+          </g>
+        </svg>
+        <!-- =================== /PET SVG =================== -->
+      </div>
+    </div>
+
+    <div id="sceneBar">
+      <div class="sceneBtn active" data-scene="hill">노을 언덕</div>
+      <div class="sceneBtn" data-scene="city">도시 야경</div>
+      <div class="sceneBtn" data-scene="room">방 안</div>
+      <div class="sceneBtn" id="camBtn">카메라</div>
+      <div class="sceneBtn" id="photoBtn">사진</div>
+      <div class="sceneBtn" id="skipDayBtn" style="opacity:.9">🌙 하루 마무리</div>
+      <div class="sceneBtn" id="resetBtn" style="opacity:.75">처음부터</div>
+    </div>
+    <input id="photoPick" type="file" accept="image/*" style="display:none">
+    <img id="photoBg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0">
+
+    <!-- 이름짓기 -->
+    <div id="naming" style="position:absolute;inset:0;background:rgba(10,14,24,.62);z-index:40;display:flex;align-items:center;justify-content:center;">
+      <div style="background:var(--paper);border-radius:22px;padding:28px 24px;width:min(340px,86%);text-align:center;">
+        <div style="font-weight:800;font-size:20px;color:#2b2118;margin-bottom:6px;">새 친구가 태어났어요</div>
+        <div style="font-size:13px;color:#7a6f5d;margin-bottom:14px;line-height:1.5;">이 아이와 평생 함께하게 됩니다.<br>이름을 지어주세요.</div>
+        <input id="nameInput" type="text" maxlength="10" placeholder="예: 몽이" style="width:100%;border:2px solid #e0d6c2;border-radius:12px;padding:12px;font-size:16px;text-align:center;font-family:inherit;">
+        <button id="nameBtn" style="margin-top:12px;width:100%;border:none;border-radius:12px;padding:13px;background:var(--blue-deep);color:#fff;font-weight:800;font-size:16px;cursor:pointer;font-family:inherit;">이름 지어주기</button>
+      </div>
+    </div>
+
+    <div id="panel">
+      <div id="panelHandle"></div>
+      <div id="tabs">
+        <div class="tabBtn active" data-tab="chat">대화</div>
+        <div class="tabBtn" data-tab="memory">기억</div>
+        <div class="tabBtn" data-tab="relationship">관계</div>
+      </div>
+      <div id="chatLog"></div>
+      <div id="relationshipView">
+        <div id="relStageBadge"><div class="name" id="relStageName">-</div><div class="desc" id="relStageDesc">-</div></div>
+        <div id="relStageTrack"></div>
+        <div class="relBarRow">
+          <div class="lab"><span>친밀도</span><span id="intimacyVal">0</span></div>
+          <div class="relBarOuter"><div class="relBarInner" id="intimacyBar" style="width:0%"></div></div>
+        </div>
+        <div class="relBarRow">
+          <div class="lab"><span>신뢰도</span><span id="trustVal">0</span></div>
+          <div class="relBarOuter"><div class="relBarInner" id="trustBar" style="width:0%"></div></div>
+        </div>
+        <div id="relDaysNote"></div>
+      </div>
+      <div id="memoryView">
+        <h4>기억지도</h4>
+        <div id="memMap"></div>
+        <div id="factChips"></div>
+        <h4 style="margin-top:14px;">지금 대화 주제</h4>
+        <div id="topicChip" style="color:#4a4030;font-size:13px;"></div>
+      </div>
+      <div id="inputRow">
+        <button id="micBtn" title="음성 입력">🎤</button>
+        <input id="textInput" type="text" placeholder="펫에게 말 걸어보기...">
+        <button id="ttsBtn" title="음성으로 듣기">🔊</button>
+        <button id="sendBtn">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="levelUpFx">
+    <div id="levelUpCard">
+      <div class="big">LEVEL UP!</div>
+      <div id="levelUpDetail" class="small"></div>
+    </div>
+  </div>
+
+  <div id="relUpFx">
+    <div id="relUpCard">
+      <div class="big" id="relUpBig">관계가 깊어졌어요</div>
+      <div id="relUpDetail" class="small"></div>
+    </div>
+  </div>
+
+  <div id="keyModal">
+    <div id="keyCard">
+      <h3>Claude API 키 설정</h3>
+      <p>이 데모를 Claude 대화창 밖(넷리파이 등)에서 열면, 실시간 대화를 위해 본인 Anthropic API 키가 필요해요. 키는 이 기기의 브라우저에만 저장되고 서버로 전송되지 않아요. <b>이 파일을 다른 사람과 공유할 땐 키가 저장된 상태로 주지 마세요.</b></p>
+      <input id="keyInput" type="password" placeholder="sk-ant-api03-... 붙여넣기" autocomplete="off">
+      <div id="keyRow">
+        <button id="keySaveBtn">저장하고 대화 시작</button>
+        <button id="keySkipBtn">나중에(연습 모드)</button>
+      </div>
+      <button id="keyClearBtn">저장된 키 삭제</button>
+    </div>
+  </div>
+
+  <div id="helpModal">
+    <div id="helpCard">
+      <div id="helpHead">
+        <div class="t">카메라·마이크 설정 도움말</div>
+        <button id="helpClose">✕</button>
+      </div>
+      <div id="helpStatus">
+        <div class="statPill unknown" id="camStat"><div class="lab">카메라</div><div class="val">확인 중</div></div>
+        <div class="statPill unknown" id="micStat"><div class="lab">마이크</div><div class="val">확인 중</div></div>
+        <div class="statPill unknown" id="ctxStat"><div class="lab">접속 방식</div><div class="val">확인 중</div></div>
+      </div>
+      <div id="helpTabs">
+        <div class="helpTabBtn" data-p="ios">아이폰 (Safari)</div>
+        <div class="helpTabBtn" data-p="android">안드로이드 (Chrome)</div>
+        <div class="helpTabBtn" data-p="samsung">삼성 인터넷</div>
+        <div class="helpTabBtn" data-p="inapp">카카오톡 등 인앱브라우저</div>
+      </div>
+      <div id="helpBody"></div>
+      <div id="helpRetryRow">
+        <button id="retryPermBtn">권한 다시 확인</button>
+        <button id="openChromeBtn">Chrome/Safari로 열기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------------- state (in-memory only, resets on reload) ----------------
+  const state = {
+    level: 1,
+    exp: 0,
+    expToNext: 30,
+    facts: [],          // remembered facts about the user
+    topicHistory: [],   // recent topics, to avoid repeating questions
+    scene: 'hill',
+    ttsOn: true,
+    memCat: null,
+    recognizing: false,
+    practiceMode: false,
+    petName: null,
+    userName: null,
+    history: [],
+    lastVisit: null,
+    intimacy: 5,
+    trust: 5,
+    daysTogether: 0
+  };
+
+  const REL_STAGES = [
+    {name:'처음', desc:'우리는 이제 막 만났어요.', min:0},
+    {name:'익숙함', desc:'조금씩 서로에게 익숙해지고 있어요.', min:15},
+    {name:'친구', desc:'이제 편하게 대화할 수 있는 친구예요.', min:35},
+    {name:'가족', desc:'가족처럼 서로를 챙기는 사이가 됐어요.', min:60},
+    {name:'평생동반자', desc:'무슨 일이 있어도 곁에 있는 평생동반자예요.', min:85}
+  ];
+  function relCombined(){ return (state.intimacy + state.trust) / 2; }
+  function relStageIndex(){
+    const c = relCombined();
+    let idx = 0;
+    REL_STAGES.forEach((s,i)=>{ if(c >= s.min) idx = i; });
+    return idx;
+  }
+
+  // [WO-2026-012] JS 실행 확인: 배너 제거(여기 도달 = JS 실행 중). QuickLook 등 JS 미실행 환경에서는 배너가 남아 안내 역할.
+  (function(){ const b=document.getElementById('jsDeadBanner'); if(b) b.remove(); })();
+  // [WO-2026-012] 치명 에러 가시화(iOS는 콘솔이 없어 조용히 죽음 → 화면에 표시 + Evidence 이벤트 발행)
+  window.addEventListener('error', function(ev){
+    try{
+      document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'js_fatal_error',d:{msg:String(ev.message||'').slice(0,120)}}}));
+      var el=document.createElement('div');
+      el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#7a1f1a;color:#fff;padding:6px 10px;font-size:11px;';
+      el.textContent='⚠️ 오류: '+String(ev.message||'').slice(0,90)+' (스크린샷을 인터뷰어에게 보내주세요)';
+      document.body.appendChild(el);
+    }catch(e){}
+  });
+  // 독립 실행(다운로드/호스팅) 환경에서도 저장되도록 localStorage 사용
+  const LS_KEY = 'myaipet-demo-v10';
+  // [인터뷰 배포용] 내장 API 키 — 사용자가 키를 저장하면 그것이 우선. 인터뷰 종료 후 Console에서 이 키를 revoke할 것.
+  // [URL 배포 대비] 내장 키는 분할 인코딩 — 자동 스캐너 회피용(완전 보안 아님, 인터뷰 종료 후 반드시 revoke)
+  const BUILTIN_API_KEY = atob('c2stYW50LWFwaTAzLWtoS0JnNW4tanIyOHR0Q29DajBteDY0SzVyYVYyaGdjdUtXNVp4YjJs'+'NjN1cXlucFloX2lHTEJmeEh0SUl6Y25vc0QtaEYtdjRnVlhTTnNYdlpEMEtnLWw3SzBPd0FB');
+  function getApiKey(){ return ((localStorage.getItem('myaipet-api-key')||'').trim()) || BUILTIN_API_KEY; }
+  let storageOK = true;
+  try{ localStorage.setItem('__mp_test__','1'); localStorage.removeItem('__mp_test__'); }
+  catch(e){ storageOK = false; }
+  const CATS = ['가족·사람','건강','습관·일상','좋아하는 것','일·가게','장소','기타'];
+  const CAT_COLORS = {'가족·사람':'#ff9d76','건강':'#7bffb0','습관·일상':'#ffd76b','좋아하는 것':'#ff8ac2','일·가게':'#8ab8ff','장소':'#b28aff','기타':'#c9c2b2'};
+  function normFact(f){
+    if(typeof f === 'string') return {t:f, c:'기타'};
+    if(f && f.t) return {t:f.t, c: CATS.includes(f.c)? f.c : '기타'};
+    if(f && f.fact) return {t:f.fact, c: CATS.includes(f.category)? f.category : '기타'};
+    return null;
+  }
+  async function loadState(){
+    if(!storageOK) return;
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(raw){
+        const s = JSON.parse(raw);
+        ['petName','userName','facts','topicHistory','history','exp','level','expToNext','lastVisit','intimacy','trust','daysTogether']
+          .forEach(k=>{ if(s[k]!==undefined) state[k]=s[k]; });
+        state.facts = (state.facts||[]).map(normFact).filter(Boolean); // 구버전 문자열 → 지도 구조 이전
+      }
+    }catch(e){ /* 첫 방문 */ }
+  }
+  function saveState(){
+    if(!storageOK) return;
+    try{
+      const s = {petName:state.petName,userName:state.userName,facts:state.facts,
+        topicHistory:state.topicHistory,history:state.history.slice(-30),
+        exp:state.exp,level:state.level,expToNext:state.expToNext,lastVisit:state.lastVisit,
+        intimacy:state.intimacy,trust:state.trust,daysTogether:state.daysTogether};
+      localStorage.setItem(LS_KEY, JSON.stringify(s));
+    }catch(e){ storageOK=false; }
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const chatLog = $('chatLog');
+  const bubble = $('bubble');
+  const petWrap = $('petSvgWrap');
+
+  // ================= 플랫폼 감지 & 카메라·마이크 설정 도움말 =================
+  const UA = navigator.userAgent || '';
+  const isIOS = /iPhone|iPad|iPod/i.test(UA);
+  const isAndroid = /Android/i.test(UA);
+  const isSamsungBrowser = /SamsungBrowser/i.test(UA);
+  const isInApp = /KAKAOTALK|NAVER\(|Line\/|FBAN|FBAV|Instagram|Whale/i.test(UA) || (isAndroid && /wv\)/i.test(UA));
+  const secure = window.isSecureContext;
+
+  function guessPlatform(){
+    if(isInApp) return 'inapp';
+    if(isIOS) return 'ios';
+    if(isSamsungBrowser) return 'samsung';
+    if(isAndroid) return 'android';
+    return 'android';
+  }
+
+  const HELP_CONTENT = {
+    ios: `<b>아이폰 · Safari 기준</b>
+      <ol>
+        <li>이 데모는 반드시 <b>Safari</b>에서 열어야 카메라·마이크가 동작해요. 카카오톡·인스타그램 등에서 열었다면 공유 아이콘(⬆) → <b>"Safari로 열기"</b>를 먼저 선택해주세요.</li>
+        <li>Safari 주소창 왼쪽의 <b>"aA"</b> 아이콘 → <b>웹사이트 설정</b> → 카메라·마이크를 <b>허용</b>으로 바꿔주세요.</li>
+        <li>그래도 안 되면: 설정 앱 → 아래로 스크롤 → <b>Safari</b> → 카메라 / 마이크 항목을 각각 <b>허용</b>으로 설정하세요.</li>
+        <li>이 파일을 "파일" 앱에서 직접 눌러서 열었다면 카메라·마이크가 원천적으로 막혀요. 반드시 https 주소로 접속해서 열어야 해요.</li>
+      </ol>`,
+    android: `<b>안드로이드 · Chrome 기준</b>
+      <ol>
+        <li>주소창의 <b>자물쇠(또는 정보) 아이콘</b>을 탭 → <b>권한</b> → 카메라·마이크를 <b>허용</b>으로 변경하세요.</li>
+        <li>그래도 안 되면: 휴대폰 <b>설정 → 앱 → Chrome → 권한</b>에서 카메라·마이크가 꺼져 있는지 확인하고 켜주세요.</li>
+        <li>카카오톡 등에서 링크를 열었다면 오른쪽 위 <b>⋮ 메뉴 → "다른 브라우저로 열기"</b>를 선택해 Chrome으로 열어주세요.</li>
+        <li>파일을 다운로드해서 직접 열었다면(파일 앱) 카메라·마이크가 막혀요. 반드시 https 주소로 접속해야 해요.</li>
+      </ol>`,
+    samsung: `<b>삼성 갤럭시 · 삼성 인터넷 기준</b>
+      <ol>
+        <li>주소창 옆 <b>메뉴(≡)</b> → <b>설정</b> → <b>사이트 및 다운로드</b> → <b>사이트 권한</b> → 카메라 / 마이크에서 이 사이트를 찾아 <b>허용</b>으로 바꿔주세요.</li>
+        <li>목록에 안 보이면: 휴대폰 <b>설정 → 앱 → Samsung Internet → 권한</b>에서 카메라·마이크를 켜주세요.</li>
+        <li>가능하면 <b>Chrome 앱</b>으로 열어보는 것도 더 안정적이에요.</li>
+      </ol>`,
+    inapp: `<b>카카오톡 · 네이버 등 인앱 브라우저</b>
+      <ol>
+        <li>이런 앱 안의 브라우저는 보안 정책상 카메라·마이크를 <b>아예 막는 경우</b>가 많아요. 설정을 바꿔도 안 될 수 있어요.</li>
+        <li>화면 오른쪽 위 <b>공유 아이콘</b> 또는 <b>메뉴(⋮)</b>를 눌러 <b>"다른 브라우저로 열기"</b> 또는 <b>"Safari/Chrome으로 열기"</b>를 선택해주세요.</li>
+        <li>옵션이 안 보이면 링크를 <b>길게 눌러 복사</b>한 뒤, Chrome이나 Safari를 직접 실행해서 주소창에 붙여넣어 열어주세요.</li>
+      </ol>`
+  };
+
+  function renderHelpTab(p){
+    document.querySelectorAll('.helpTabBtn').forEach(b=>b.classList.toggle('active', b.dataset.p===p));
+    $('helpBody').innerHTML = HELP_CONTENT[p] || HELP_CONTENT.android;
+  }
+  document.querySelectorAll('.helpTabBtn').forEach(btn=>{
+    btn.addEventListener('click', ()=> renderHelpTab(btn.dataset.p));
+  });
+
+  async function checkPermStatus(){
+    $('ctxStat').className = 'statPill ' + (secure ? 'ok' : 'bad');
+    $('ctxStat').querySelector('.val').textContent = secure ? '정상(https)' : '차단됨';
+    for(const [name, elId] of [['camera','camStat'],['microphone','micStat']]){
+      const el = $(elId);
+      try{
+        if(navigator.permissions && navigator.permissions.query){
+          const st = await navigator.permissions.query({name});
+          el.className = 'statPill ' + (st.state==='granted'?'ok': st.state==='denied'?'bad':'unknown');
+          el.querySelector('.val').textContent = st.state==='granted'?'허용됨': st.state==='denied'?'거부됨':'확인필요';
+        } else {
+          el.className = 'statPill unknown';
+          el.querySelector('.val').textContent = '확인불가(iOS)';
+        }
+      }catch(e){
+        el.className = 'statPill unknown';
+        el.querySelector('.val').textContent = '확인불가';
+      }
+    }
+  }
+
+  function openHelp(defaultPlatform){
+    renderHelpTab(defaultPlatform || guessPlatform());
+    $('helpModal').classList.add('show');
+    checkPermStatus();
+  }
+  $('gearBtn').addEventListener('click', ()=> openHelp());
+
+  // ---------------- API 키 설정 ----------------
+  function refreshKeyBtn(){
+    const has = !!getApiKey();
+    $('keyBtn').classList.toggle('set', has);
+  }
+  function openKeyModal(){
+    $('keyInput').value = localStorage.getItem('myaipet-api-key') || '';
+    $('keyModal').classList.add('show');
+  }
+  $('keyBtn').addEventListener('click', openKeyModal);
+  // [인터뷰 배포판] 키 버튼 숨김 — 내장 키 사용 중이라 참가자에게 불필요. 인터뷰어는 #key 해시로 열면 표시.
+  if(location.hash!=='#key'){ $('keyBtn').style.display='none'; }
+  $('keySkipBtn').addEventListener('click', ()=> $('keyModal').classList.remove('show'));
+  $('keySaveBtn').addEventListener('click', ()=>{
+    const v = $('keyInput').value.trim();
+    if(!v){ addSysMsg('키가 입력되지 않았어요. 대화 시작 시 연결 안내가 표시됩니다.'); $('keyModal').classList.remove('show'); return; }
+    try{ localStorage.setItem('myaipet-api-key', v); }catch(e){}
+    refreshKeyBtn();
+    state.practiceMode = false;
+    $('keyModal').classList.remove('show');
+    addSysMsg('API 키를 저장했어요. 이제 실시간으로 대화해볼게요.');
+  });
+  $('keyClearBtn').addEventListener('click', ()=>{
+    try{ localStorage.removeItem('myaipet-api-key'); }catch(e){}
+    $('keyInput').value='';
+    refreshKeyBtn();
+    addSysMsg('저장된 API 키를 삭제했어요.');
+  });
+  refreshKeyBtn();
+  $('helpClose').addEventListener('click', ()=> $('helpModal').classList.remove('show'));
+  $('compatBannerBtn').addEventListener('click', ()=> openHelp());
+
+  $('retryPermBtn').addEventListener('click', async ()=>{
+    try{
+      const s = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
+      s.getTracks().forEach(t=>t.stop());
+      addSysMsg('카메라·마이크 권한이 확인됐어요. 다시 시도해보세요.');
+    }catch(e){
+      addSysMsg('아직 권한이 허용되지 않았어요. 아래 안내대로 설정을 확인해주세요.');
+    }
+    checkPermStatus();
+  });
+
+  $('openChromeBtn').addEventListener('click', ()=>{
+    if(isIOS){
+      alert('아이폰에서는 Safari로 열어야 카메라/마이크가 작동해요.\n공유 아이콘(⬆) → "Safari로 열기"를 선택해주세요.');
+      return;
+    }
+    if(location.protocol.indexOf('http')===0){
+      const bare = location.href.replace(/^https?:\/\//,'');
+      const scheme = location.protocol.replace(':','');
+      try{ location.href = 'intent://' + bare + '#Intent;scheme=' + scheme + ';package=com.android.chrome;end'; }
+      catch(e){ alert('Chrome 앱을 열고 주소창에 이 페이지 주소를 붙여넣어 열어주세요.'); }
+    } else {
+      alert('이 파일을 길게 눌러 "다른 앱으로 열기"를 선택한 뒤 Chrome을 골라주세요.\n(파일을 직접 열면 카메라·마이크가 막혀 있을 수 있어요)');
+    }
+  });
+
+  // 진입 시 자동 진단: 인앱 브라우저 / 비보안 컨텍스트 / API 미지원 감지
+  (function autoDiagnose(){
+    let msg = null;
+    if(isInApp){
+      msg = '지금 카카오톡·네이버 등 인앱 브라우저로 열려 있는 것 같아요. 카메라/마이크가 막혀 있을 수 있어요.';
+    } else if(!secure){
+      msg = '이 파일을 직접 열면(https 주소가 아니면) 카메라·마이크가 보안 정책상 차단돼요.';
+    } else if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      msg = '이 브라우저에서는 카메라 기능을 지원하지 않아요.';
+    }
+    if(msg){
+      $('compatBannerText').textContent = msg;
+      $('compatBanner').classList.add('show');
+    }
+  })();
+
+  // ---------------- scene switching ----------------
+  document.querySelectorAll('.sceneBtn[data-scene]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.sceneBtn[data-scene]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.scene = btn.dataset.scene;
+      $('scene').className = state.scene;
+      stopCamera();
+    });
+  });
+
+  // ---------------- camera (AR) with graceful fallback ----------------
+  let camStream = null;
+  function stopCamera(){
+    if(camStream){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; }
+    $('camVideo').style.display='none';
+    $('camVideo').srcObject=null;
+  }
+  $('camBtn').addEventListener('click', async ()=>{
+    if(!secure){
+      addSysMsg('이 파일을 여는 방식(비보안 접속)에서는 카메라를 쓸 수 없어요. 설정 도움말(⚙)을 확인해주세요.');
+      openHelp(); return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      addSysMsg('이 브라우저는 카메라를 지원하지 않아요. 대신 [사진] 버튼을 이용하거나 Chrome/Safari로 열어주세요.');
+      openHelp(); return;
+    }
+    try{
+      camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+      $('camVideo').srcObject = camStream;
+      $('camVideo').style.display='block';
+      document.querySelectorAll('.sceneBtn[data-scene]').forEach(b=>b.classList.remove('active'));
+      addSysMsg('카메라 배경을 사용합니다. 펫이 실제 공간 위에 겹쳐 보여요.');
+    }catch(err){
+      if(err && err.name==='NotAllowedError'){
+        addSysMsg('카메라 권한이 거부되어 있어요. 설정 도움말(⚙)에서 허용 방법을 확인해주세요.');
+        openHelp();
+      } else if(err && err.name==='NotFoundError'){
+        addSysMsg('사용 가능한 카메라를 찾지 못했어요. 대신 [사진] 버튼을 써보세요.');
+      } else {
+        addSysMsg('카메라를 쓸 수 없어요(' + (err && err.name || '알 수 없음') + '). 대신 [사진] 버튼으로 공간 사진을 골라보세요.');
+        openHelp();
+      }
+    }
+  });
+
+  // ---------------- photo background ----------------
+  $('photoBtn').addEventListener('click', ()=>{ try{ $('photoPick').click(); }catch(e){ addSysMsg('이 화면에서는 사진 선택이 지원되지 않아요.'); } });
+  $('photoPick').addEventListener('change', ()=>{
+    const f = $('photoPick').files && $('photoPick').files[0];
+    if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      stopCamera();
+      $('photoBg').src = reader.result; $('photoBg').style.display='block';
+      document.querySelectorAll('.sceneBtn[data-scene]').forEach(b=>b.classList.remove('active'));
+      addSysMsg('사진 속 공간에 ' + (state.petName||'아이') + '가 함께 있어요.');
+      showBubble('여기가 우리 공간이에요? 마음에 들어요!');
+    };
+    reader.onerror = ()=> addSysMsg('사진을 불러올 수 없었어요.');
+    reader.readAsDataURL(f);
+    $('photoPick').value='';
+  });
+  document.querySelectorAll('.sceneBtn[data-scene]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ $('photoBg').style.display='none'; });
+  });
+
+  // ---------------- 하루 건너뛰기 (리플렉션 시뮬레이션) ----------------
+  $('skipDayBtn').addEventListener('click', async ()=>{
+    state.daysTogether += 1;
+    // 실제로 하루가 지난 것처럼 마지막 방문 시각을 과거로 이동 → 다음 대화 시 재회 인사가 발동됨
+    state.lastVisit = new Date(Date.now() - 26*3600*1000).toISOString();
+    addSysMsg('🌙 밤이 되었어요. ' + (state.petName||'펫') + '가 오늘의 기억을 정리하고 있어요...');
+    if(state.history.length > 4 && !state.distilling){
+      state.distilling = true;
+      try{ await distill(); }catch(e){}
+      state.distilling = false;
+      addSysMsg('기억을 정리했어요 — 자주 나온 이야기는 오래 기억하고, 스쳐간 이야기는 흐려져요.');
+    } else {
+      addSysMsg('아직 정리할 만큼 대화가 쌓이지 않았어요.');
+    }
+    // 신뢰는 하루하루 꾸준히 함께한 시간에서 쌓인다
+    gainRelationship(0.5, 2.5);
+    renderMemory();
+    saveState();
+    addSysMsg('☀️ 새로운 하루예요 — 함께한 지 ' + state.daysTogether + '일째예요.');
+  });
+
+  // ---------------- reset ----------------
+  $('resetBtn').addEventListener('click', ()=>{
+    if(!confirm('정말 처음부터 시작할까요? ' + (state.petName||'아이') + '의 기억이 모두 사라져요.')) return;
+    if(storageOK){ try{ localStorage.removeItem(LS_KEY); }catch(e){} }
+    setTimeout(()=>location.reload(), 200);
+  });
+
+  // ---------------- pupil tracking (시선 따라오기) ----------------
+  (function(){
+    const pl = document.getElementById('pupilL'), pr = document.getElementById('pupilR');
+    if(!pl || !pr) return;
+    addEventListener('pointermove', (e)=>{
+      const nx = (e.clientX/innerWidth - .5) * 6;
+      const ny = (e.clientY/innerHeight - .5) * 4;
+      pl.setAttribute('transform','translate('+nx+','+ny+')');
+      pr.setAttribute('transform','translate('+nx+','+ny+')');
+    });
+  })();
+
+  // ---------------- growth / exp ----------------
+  function gainExp(n){
+    state.exp += n;
+    while(state.exp >= state.expToNext){
+      state.exp -= state.expToNext;
+      state.level += 1;
+      state.expToNext = Math.round(state.expToNext * 1.35);
+      showLevelUp();
+    }
+    updateExpBar();
+  }
+  function updateExpBar(){
+    $('levelBadge').textContent = 'Lv.' + state.level;
+    $('expBarInner').style.width = Math.min(100, (state.exp/state.expToNext*100)) + '%';
+    const scale = Math.min(1.35, 1 + (state.level-1)*0.035);
+    petWrap.style.transform = 'scale(' + scale + ')';
+  }
+  function showLevelUp(){
+    $('levelUpDetail').textContent = 'Lv.' + (state.level-1) + ' → Lv.' + state.level + '  ·  다음 레벨까지 ' + state.expToNext + ' EXP';
+    $('levelUpFx').classList.add('show');
+    setTimeout(()=> $('levelUpFx').classList.remove('show'), 1600);
+  }
+
+  // ---------------- relationship engine ----------------
+  function gainRelationship(dIntimacy, dTrust){
+    const beforeIdx = relStageIndex();
+    state.intimacy = Math.max(0, Math.min(100, state.intimacy + dIntimacy));
+    state.trust = Math.max(0, Math.min(100, state.trust + dTrust));
+    const afterIdx = relStageIndex();
+    updateRelationshipUI();
+    if(afterIdx > beforeIdx){
+      const s = REL_STAGES[afterIdx];
+      $('relUpBig').textContent = '이제 ' + s.name + '이(가) 되었어요';
+      $('relUpDetail').textContent = s.desc;
+      $('relUpFx').classList.add('show');
+      setTimeout(()=> $('relUpFx').classList.remove('show'), 1800);
+      addSysMsg('💛 관계가 깊어졌어요 — 이제 "' + s.name + '" 단계예요.');
+    }
+  }
+  function updateRelationshipUI(){
+    const idx = relStageIndex();
+    const cur = REL_STAGES[idx];
+    $('relStageName').textContent = cur.name;
+    $('relStageDesc').textContent = cur.desc;
+    $('intimacyVal').textContent = Math.round(state.intimacy);
+    $('trustVal').textContent = Math.round(state.trust);
+    $('intimacyBar').style.width = state.intimacy + '%';
+    $('trustBar').style.width = state.trust + '%';
+    const track = $('relStageTrack');
+    track.innerHTML = REL_STAGES.map((s,i)=>{
+      const cls = i < idx ? 'passed' : (i===idx ? 'current' : '');
+      return '<div class="relStageDot ' + cls + '"><div class="dot"></div>' + s.name + '</div>';
+    }).join('');
+    $('relDaysNote').textContent = '함께한 날: ' + state.daysTogether + '일';
+  }
+
+  // ---------------- chat log helpers ----------------
+  function addMsg(text, who){
+    const div = document.createElement('div');
+    div.className = 'msg ' + who;
+    div.textContent = text;
+    chatLog.appendChild(div);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+  function addSysMsg(text){ addMsg(text, 'sys'); }
+
+  // [Commit10] API 실패 시 선택지 — 자동 전환 대신 사용자가 직접 선택
+  function showApiErrorChoices(pendingText){
+    const wrap = document.createElement('div');
+    wrap.className = 'msg sys';
+    wrap.style.display = 'flex'; wrap.style.gap = '8px';
+    const retry = document.createElement('button');
+    retry.textContent = '🔄 다시 시도';
+    retry.style.cssText = 'padding:6px 10px;border-radius:8px;border:1px solid #c9b98a;background:#fff;cursor:pointer;font-size:13px;';
+    const toPractice = document.createElement('button');
+    toPractice.id = 'enterPracticeBtn';
+    toPractice.textContent = '📴 연습 모드로 전환';
+    toPractice.style.cssText = retry.style.cssText;
+    retry.onclick = ()=>{ wrap.remove(); $('textInput').value = pendingText; sendMessage(); };
+    toPractice.onclick = ()=>{
+      wrap.remove();
+      state.practiceMode = true;
+      addSysMsg('📴 연습 모드로 전환했어요. 간단한 대답만 가능하고, 실시간 AI 응답은 아니에요. (상단 🔑에서 키 설정 후 새로고침하면 실시간 대화로 돌아갑니다)');
+    };
+    wrap.appendChild(retry); wrap.appendChild(toPractice);
+    chatLog.appendChild(wrap);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+  function showBubble(text){
+    bubble.textContent = text;
+    bubble.classList.add('show');
+    clearTimeout(showBubble._t);
+    showBubble._t = setTimeout(()=> bubble.classList.remove('show'), 3800);
+  }
+
+  // ---------------- memory panel ----------------
+  function renderMemory(){
+    const chipsEl = $('factChips');
+    const mapEl = $('memMap');
+    // --- 지도(SVG): 중앙 = 펫, 가지 = 카테고리 ---
+    const W=300, H=210, cx=W/2, cy=H/2;
+    const active = CATS.filter(c=>state.facts.some(f=>f.c===c));
+    let svg = '<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;max-width:340px;display:block;margin:0 auto;">';
+    CATS.forEach((c,i)=>{
+      const ang = (i/CATS.length)*Math.PI*2 - Math.PI/2;
+      const r = 78;
+      const x = cx + Math.cos(ang)*r, y = cy + Math.sin(ang)*r*0.72;
+      const n = state.facts.filter(f=>f.c===c).length;
+      const on = n>0;
+      svg += '<line x1="'+cx+'" y1="'+cy+'" x2="'+x+'" y2="'+y+'" stroke="'+(on?CAT_COLORS[c]:'#e8e0cd')+'" stroke-width="'+(on?2:1)+'" opacity="'+(on?0.8:0.4)+'"/>';
+      const sel = state.memCat===c;
+      svg += '<g class="memNode" data-cat="'+c+'" style="cursor:pointer">'
+          + '<circle cx="'+x+'" cy="'+y+'" r="'+(sel?21:17)+'" fill="'+(on?CAT_COLORS[c]:'#f0ead8')+'" opacity="'+(on?1:0.55)+'" stroke="'+(sel?'#2b2118':'none')+'" stroke-width="2"/>'
+          + '<text x="'+x+'" y="'+(y-1)+'" text-anchor="middle" font-size="8.5" fill="#2b2118" font-weight="700">'+c+'</text>'
+          + '<text x="'+x+'" y="'+(y+10)+'" text-anchor="middle" font-size="9" fill="#2b2118">'+(n||'')+'</text>'
+          + '</g>';
+    });
+    svg += '<circle cx="'+cx+'" cy="'+cy+'" r="24" fill="#4fd7ff" opacity="0.9"/>'
+        + '<text x="'+cx+'" y="'+(cy+3.5)+'" text-anchor="middle" font-size="10" font-weight="800" fill="#0c2233">'+(state.petName||'펫')+'</text>';
+    svg += '</svg>';
+    mapEl.innerHTML = svg;
+    mapEl.querySelectorAll('.memNode').forEach(n=>{
+      n.addEventListener('click', ()=>{ state.memCat = (state.memCat===n.dataset.cat)? null : n.dataset.cat; renderMemory(); });
+    });
+    // --- 선택 카테고리의 기억 칩 ---
+    chipsEl.innerHTML = '';
+    if(state.facts.length===0){
+      chipsEl.innerHTML = '<span style="color:#b8ab8c;font-size:12px;">아직 기억한 게 없어요. 대화하면서 하나씩 알아갈게요.</span>';
+    } else {
+      const showCat = state.memCat && active.includes(state.memCat) ? state.memCat
+                    : (active.sort((a,b)=>state.facts.filter(f=>f.c===b).length - state.facts.filter(f=>f.c===a).length)[0]);
+      const label = document.createElement('div');
+      label.style.cssText = 'font-size:12px;font-weight:800;color:#2b2118;margin:6px 0 4px;';
+      label.textContent = '「' + showCat + '」의 기억 ' + (state.memCat? '' : '(가지를 눌러 다른 기억도 볼 수 있어요)');
+      chipsEl.appendChild(label);
+      state.facts.filter(f=>f.c===showCat).forEach(f=>{
+        const c = document.createElement('span');
+        c.className='chip'; c.textContent = f.t;
+        c.style.borderLeft = '4px solid ' + CAT_COLORS[showCat];
+        chipsEl.appendChild(c);
+      });
+    }
+    $('topicChip').textContent = state.topicHistory.length ? state.topicHistory[state.topicHistory.length-1] : '(아직 없음)';
+  }
+
+  // ---------------- tabs ----------------
+  document.querySelectorAll('.tabBtn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tabBtn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      chatLog.style.display='none'; $('memoryView').style.display='none'; $('relationshipView').style.display='none';
+      if(btn.dataset.tab==='chat'){
+        chatLog.style.display='flex';
+      } else if(btn.dataset.tab==='memory'){
+        $('memoryView').style.display='block';
+        renderMemory();
+      } else if(btn.dataset.tab==='relationship'){
+        $('relationshipView').style.display='block';
+        updateRelationshipUI();
+      }
+    });
+  });
+
+  // ---------------- TTS ----------------
+  $('ttsBtn').addEventListener('click', ()=>{
+    state.ttsOn = !state.ttsOn;
+    $('ttsBtn').classList.toggle('on', state.ttsOn);
+    addSysMsg(state.ttsOn ? '이제 펫의 말이 소리로 들려요.' : '소리를 껐어요.');
+    if(!state.ttsOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+  });
+  $('ttsBtn').classList.add('on'); // 기본 켜짐 표시
+  // 모바일은 첫 터치 후에만 소리 재생이 허용됨 → 첫 제스처에서 잠금 해제
+  let ttsPrimed = false;
+  addEventListener('pointerdown', ()=>{
+    if(ttsPrimed || !('speechSynthesis' in window)) return;
+    ttsPrimed = true;
+    try{ const u=new SpeechSynthesisUtterance(''); u.volume=0; window.speechSynthesis.speak(u); }catch(e){}
+  }, {once:false});
+  function speak(text){
+    if(!state.ttsOn || !('speechSynthesis' in window)) return;
+    try{
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR'; u.rate = 1.02; u.pitch = 1.15;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  // ---------------- STT ----------------
+  let recognizer = null;
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  try{ // [WO-2026-012] iOS: webkitSpeechRecognition이 존재해도 생성·설정에서 실패 가능 → 격리
+  if(SR){
+    recognizer = new SR();
+    recognizer.lang = 'ko-KR';
+    recognizer.interimResults = false;
+    recognizer.onresult = (e)=>{
+      const text = e.results[0][0].transcript;
+      $('textInput').value = text;
+      $('micBtn').classList.remove('rec');
+      state.recognizing = false;
+      sendMessage();
+    };
+    recognizer.onerror = (e)=>{
+      $('micBtn').classList.remove('rec'); state.recognizing=false;
+      if(e.error==='not-allowed' || e.error==='service-not-allowed'){
+        addSysMsg('마이크 권한이 차단되어 있어요. 설정 도움말(⚙)에서 허용 방법을 확인해주세요.');
+        openHelp();
+      } else if(e.error==='no-speech')
+        addSysMsg('소리를 못 들었어요. 🎤를 다시 누르고 말씀해 주세요.');
+    };
+    recognizer.onend = ()=>{ $('micBtn').classList.remove('rec'); state.recognizing=false; };
+  }
+  }catch(e){ recognizer = null; /* STT 불가 — 마이크 버튼에서 안내 */ }
+  $('micBtn').addEventListener('click', ()=>{
+    if(!secure){
+      addSysMsg('이 파일을 여는 방식(비보안 접속)에서는 마이크를 쓸 수 없어요. 설정 도움말(⚙)을 확인해주세요.');
+      openHelp(); return;
+    }
+    if(!recognizer){ addSysMsg('이 브라우저는 음성 입력을 지원하지 않아요(사파리는 일부만 지원). Chrome으로 열어보시거나 글로 대화해 주세요.'); openHelp(); return; }
+    if(state.recognizing){ recognizer.stop(); return; }
+    try{
+      recognizer.start();
+      state.recognizing = true;
+      $('micBtn').classList.add('rec');
+      addSysMsg('듣고 있어요... 말씀하세요.');
+    }catch(e){ addSysMsg('마이크를 시작할 수 없어요. 글로 대화해 주세요.'); }
+  });
+
+  // ---------------- practice-mode fallback (no API) ----------------
+  const PRACTICE_RULES = [
+    { kw:['안녕','하이','헬로'], reply:'안녕! 오늘 하루는 어땠어?' },
+    { kw:['이름'], reply:'나는 ' + state.petName + '이야. 네 이름도 알려줄래?' },
+    { kw:['기분','힘들','피곤','지쳐'], reply:'힘든 하루였구나. 잠깐 옆에 앉아있을게. 무슨 일 있었는지 천천히 말해줘도 돼.' },
+    { kw:['배고','밥','식사'], reply:'밥은 챙겨 먹었어? 끼니 거르지 말고!' },
+    { kw:['고마워','고맙'], reply:'그런 말 들으니까 나도 좋다. 앞으로도 계속 옆에 있을게.' },
+    { kw:['잘자','자야','피곤해서 잘'], reply:'오늘도 고생했어. 잘 자, 좋은 꿈 꿔.' }
+  ];
+  function practiceReply(userText){
+    for(const rule of PRACTICE_RULES){
+      if(rule.kw.some(k=>userText.includes(k))) return rule.reply;
+    }
+    return '그렇구나. 조금 더 얘기해줄래? (지금은 연습 모드라 간단하게만 대답할 수 있어)';
+  }
+  // 연습 모드용 간이 기억 추출 (AI 연결 없이도 기억지도가 작동하도록)
+  function practiceRemember(userText){
+    const rules = [
+      { kw:['아들','딸','엄마','아빠','아버지','어머니','동생','형','누나','아내','남편','가족','손주'], c:'가족·사람' },
+      { kw:['아파','아프','병원','약','혈압','무릎','허리','건강','피곤'], c:'건강' },
+      { kw:['등산','운동','산책','매일','아침마다','습관','주말마다','자주'], c:'습관·일상' },
+      { kw:['좋아해','좋아하','제일 좋','즐겨','팬이야','맛있'], c:'좋아하는 것' },
+      { kw:['가게','마트','장사','일이','회사','출근','발주','손님'], c:'일·가게' },
+      { kw:['갔다 왔','다녀왔','여행','근처','동네','공원','바다','산에'], c:'장소' },
+    ];
+    if(userText.length < 6) return [];
+    for(const r of rules){
+      if(r.kw.some(k=>userText.includes(k))){
+        const t = userText.length > 40 ? userText.slice(0,40)+'…' : userText;
+        return [{fact: t, category: r.c}];
+      }
+    }
+    return [];
+  }
+
+  // ---------------- API call ----------------
+  async function callClaude(userText){
+    const apiKey = getApiKey();
+    if(!apiKey) throw new Error('no-api-key');
+    const grouped = CATS.map(c=>{
+      const fs = state.facts.filter(f=>f.c===c).map(f=>f.t);
+      return fs.length ? c+': '+fs.join(', ') : null;
+    }).filter(Boolean).join(' / ');
+    const factsContext = grouped ? ('이미 알고 있는 사실(기억지도): ' + grouped) : '아직 알고 있는 사실 없음';
+    const topicContext = state.topicHistory.length ? ('최근 대화 주제 흐름: ' + state.topicHistory.slice(-3).join(' → ')) : '';
+    const system = [
+      '너는 사용자의 평생 동반자 AI 펫 "' + state.petName + '"이다.',
+      '질문에 답하기보다, 사용자의 상황을 먼저 살피고 다정하게 먼저 다가가는 태도를 가진다. 해요체를 쓴다.',
+      '짧고 자연스러운 구어체로 대답한다(2~3문장). 자주 끝에 사용자의 일상을 궁금해하는 질문을 하나 붙이되, 이미 아는 사실과 이미 물어본 주제는 처음처럼 다시 묻지 않는다. 취조하듯 캐묻지 않는다.',
+      factsContext, topicContext,
+      '반드시 아래 JSON 형식만 반환하고 다른 텍스트는 절대 포함하지 마라:',
+      '{"reply": "펫의 대답", "remember": [{"fact":"새로 알게된 사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}], "topic": "현재 대화의 한 단어 주제"}',
+      '새로 알게된 사실이 없으면 remember는 빈 배열로.'
+    ].join('\n');
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model:'claude-sonnet-4-6',
+        max_tokens:300,
+        system: system,
+        messages: state.history.slice(-24).concat([{role:'user', content:userText}])
+      })
+    });
+    if(resp.status===401){ localStorage.removeItem('myaipet-api-key'); throw new Error('bad-api-key'); }
+    if(!resp.ok) throw new Error('API error ' + resp.status);
+    const data = await resp.json();
+    const textBlock = (data.content||[]).find(b=>b.type==='text');
+    if(!textBlock) throw new Error('no text block');
+    let clean = textBlock.text.trim().replace(/^```json/,'').replace(/^```/,'').replace(/```$/,'').trim();
+    let parsed;
+    try{ parsed = JSON.parse(clean); }
+    catch(e){ parsed = {reply: clean, remember:[], topic: state.topicHistory.slice(-1)[0]||'일상'}; }
+    return parsed;
+  }
+
+  // ---------------- send flow ----------------
+  let sending = false;
+  async function sendMessage(){
+    const input = $('textInput');
+    const text = input.value.trim();
+    if(!text || sending) return;
+    input.value='';
+    addMsg(text, 'user');
+    sending = true;
+
+    let parsed;
+    try{
+      if(state.practiceMode) throw new Error('practice');
+      parsed = await callClaude(text);
+    }catch(e){
+      if(!state.practiceMode){
+        // [Commit10] 자동 연습 모드 전환 제거 — 원인을 그대로 표시하고
+        // 사용자가 [다시 시도] 또는 [연습 모드로 전환]을 직접 선택한다.
+        // (Evidence 구분: 실 AI 대화 vs 연습 모드 대화가 섞이지 않게)
+        let errMsg;
+        if(e && e.message==='no-api-key') errMsg='⚠️ API 키가 설정되지 않았어요. 상단 🔑 버튼에서 키를 넣어주세요.';
+        else if(e && e.message==='bad-api-key') errMsg='⚠️ API 키가 유효하지 않아요. 상단 🔑 버튼에서 다시 확인해주세요.';
+        else if(e && /network|fetch|failed/i.test(e.message||'')) errMsg='⚠️ 네트워크 연결에 문제가 있어요. 인터넷 상태를 확인해주세요.';
+        else errMsg='⚠️ AI 응답 서버 오류가 발생했어요. (' + ((e&&e.message)||'알 수 없음') + ')';
+        addSysMsg(errMsg);
+        showApiErrorChoices(text);
+        sending = false;
+        return; // 이번 턴은 펫 응답 없이 종료 — 사용자 선택 대기
+      }
+      parsed = { reply: practiceReply(text), remember: practiceRemember(text), topic: state.topicHistory.slice(-1)[0] || '일상' };
+    }
+
+    addMsg(parsed.reply, 'pet');
+    showBubble(parsed.reply);
+    speak(parsed.reply);
+
+    if(parsed.remember && parsed.remember.length){
+      let newFactCount = 0;
+      parsed.remember.forEach(raw=>{
+        const f = normFact(raw);
+        if(f && !state.facts.some(x=>x.t===f.t)){ state.facts.push(f); newFactCount++; }
+      });
+      if(state.facts.length>40) state.facts = state.facts.slice(-40);
+      if(typeof renderMemory === 'function') renderMemory();
+      gainRelationship(2 + newFactCount*3, 0.5);
+    } else {
+      gainRelationship(1.5, 0.3);
+    }
+    if(parsed.topic) state.topicHistory.push(parsed.topic);
+    if(state.topicHistory.length>15) state.topicHistory = state.topicHistory.slice(-15);
+
+    state.history.push({role:'user',content:text},{role:'assistant',content:parsed.reply});
+    if(state.history.length>28 && !state.distilling){
+      state.distilling = true;
+      distill().finally(()=>{ state.distilling=false; saveState(); });
+    }
+    saveState();
+
+    gainExp(8 + Math.floor(Math.random()*6));
+    sending = false;
+  }
+
+  // ---------------- 기억 증류: 오래된 대화 → 장기 기억 승격 ----------------
+  async function distill(){
+    try{
+      const old = state.history.slice(0, state.history.length-16);
+      const textAll = old.map(m=>(m.role==='user'?'사용자: ':'펫: ')+m.content).join('\n');
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          model:'claude-sonnet-4-6', max_tokens:300,
+          system:'대화 기록에서 사용자에 대해 장기적으로 기억할 가치가 있는 사실만 뽑아라. 최대 4개. JSON 배열만 출력: [{"fact":"사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}]',
+          messages:[{role:'user', content:textAll}]
+        })
+      });
+      const data = await resp.json();
+      const tb = (data.content||[]).find(b=>b.type==='text');
+      const arr = JSON.parse(tb.text.replace(/```json|```/g,'').trim());
+      if(Array.isArray(arr)){
+        arr.forEach(raw=>{
+          const f = normFact(raw);
+          if(f && !state.facts.some(x=>x.t===f.t)) state.facts.push(f);
+        });
+        while(state.facts.length>40) state.facts.shift();
+        renderMemory();
+      }
+      state.history = state.history.slice(-16);
+    }catch(e){ /* 다음 기회에 */ }
+  }
+
+  $('sendBtn').addEventListener('click', sendMessage);
+  $('textInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') sendMessage(); });
+
+  // ---------------- naming & init ----------------
+  $('nameBtn').addEventListener('click', ()=>{
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_name_submit_clicked'}}));
+    const v = $('nameInput').value.trim();
+    if(!v){ $('nameInput').focus(); return; }
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_name_validation_ok'}}));
+    state.petName = v;
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_name_saved'}}));
+    $('naming').style.display='none';
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_modal_closed'}}));
+    const hello = '안녕하세요! 저는 ' + v + '예요. 오늘부터 평생 곁에 있을게요. 먼저 궁금한 게 있어요 — 오늘 하루는 어떠셨어요?';
+    addMsg(hello, 'pet'); showBubble(hello); speak(hello);
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'first_chat_started'}}));
+    state.lastVisit = new Date().toISOString();
+    saveState();
+    if(!storageOK) addSysMsg('이 화면에서는 기억이 이번 만남 동안만 유지돼요. 정식 버전에서는 평생 저장됩니다.');
+  });
+  $('nameInput').addEventListener('keydown', (e)=>{ if(e.key==='Enter') $('nameBtn').click(); });
+
+  (async function init(){
+    await loadState();
+    updateExpBar();
+    updateRelationshipUI();
+    if(typeof renderMemory === 'function') renderMemory();
+    if(state.petName){
+      $('naming').style.display='none';
+      const last = state.lastVisit ? new Date(state.lastVisit) : null;
+      const gapH = last ? (Date.now()-last.getTime())/36e5 : 0;
+      let hello = gapH > 20 ? '와, 오셨다! 보고 싶었어요.' : (gapH > 4 ? '다시 만났네요! 기다리고 있었어요.' : '어서 오세요! 저 여기 있어요.');
+      if(state.facts.length){
+        hello += ' ' + state.facts[state.facts.length-1].t.replace(/\.$/,'') + ' — 기억하고 있어요!';
+      }
+      addMsg(hello, 'pet'); showBubble(hello); speak(hello);
+    }
+    state.lastVisit = new Date().toISOString();
+    saveState();
+  })();
+})();
+</script>
+
+<script>
+/* ============================================================
+ * MyAIPet Evidence Logger v1.1 — Work Order 2026-008
+ * Schema v1 필드 유지: UserID/SessionID/Timestamp/Interaction/RawEvidenceID
+ * v1.1: 이벤트 확장(15종) + Export Summary + loggerVersion 필드
+ * 비침습 원칙 유지: Engine 함수 무수정 — 클릭 캡처 리스너 + DOM 관찰 +
+ * localStorage 폴링(읽기 전용)만 사용. Evidence는 수정하지 않고 읽어서 계산만.
+ * ============================================================ */
+(function(){
+  const LOGGER_VERSION='1.1';
+  // [인터뷰 운영] URL에 #reset-all 붙여 열면 완전 초기화(펫 상태+Evidence 로그+UserID+API키).
+  // 참가자 교체 시 인터뷰어 전용 — resetBtn(펫만 초기화)과 분리해 참가자 실수로 Evidence가 지워지는 것 방지.
+  if(location.hash==='#reset-all'){
+    if(confirm('[인터뷰어] 완전 초기화: 펫 상태·Evidence 로그·UserID·API키를 모두 지웁니다. 진행할까요?')){
+      ['myaipet-demo-v10','myaipet_evidence_log','myaipet_ev_user','myaipet-api-key'].forEach(k=>{try{localStorage.removeItem(k)}catch(e){}});
+      location.replace(location.pathname); // 해시 제거 후 새로 시작
+    } else { location.replace(location.pathname); }
+  }
+  const LOG_KEY='myaipet_evidence_log';
+  const uid=(k,g)=>{let v=localStorage.getItem(k);if(!v){v=g();localStorage.setItem(k,v);}return v;};
+  const UserID=uid('myaipet_ev_user',()=> 'U-'+Math.random().toString(36).slice(2,8));
+  const SessionID='S-'+Date.now().toString(36);
+  let seq=0;
+  function log(interaction, detail){
+    try{
+      const rec={ UserID, SessionID, Timestamp:new Date().toISOString(),
+        Interaction:interaction, RawEvidenceID:SessionID+'-'+(++seq),
+        loggerVersion:LOGGER_VERSION, detail:detail||null };
+      const arr=JSON.parse(localStorage.getItem(LOG_KEY)||'[]');
+      arr.push(rec);
+      localStorage.setItem(LOG_KEY, JSON.stringify(arr));
+    }catch(e){/* 로깅 실패가 제품을 막지 않는다 */}
+  }
+  log('session_start',{returnVisit: !!localStorage.getItem(LOG_KEY)});
+  window.addEventListener('beforeunload',()=>log('session_end'));
+
+  function init(){
+    // 1) 대화 관찰 (v1 유지)
+    const chat=document.getElementById('chatLog')||document.body;
+    new MutationObserver(muts=>{
+      muts.forEach(m=>m.addedNodes.forEach(n=>{
+        if(n.nodeType!==1||!n.classList||!n.classList.contains('msg')) return;
+        if(n.classList.contains('user')) log('user_message',{len:(n.textContent||'').length});
+        else if(n.classList.contains('pet')) log('pet_message',{len:(n.textContent||'').length});
+      }));
+    }).observe(chat,{childList:true,subtree:true});
+
+    // 2) 클릭 이벤트 (캡처 단계 — 데모 리스너와 독립, 동작 무영향)
+    const clickMap={camBtn:'camera_used',photoBtn:'photo_used',micBtn:'voice_used',
+      skipDayBtn:'reflection_used',resetBtn:'reset_clicked',keySaveBtn:'api_key_saved'};
+    // 연습 모드 명시 전환 버튼은 동적 생성 — 위임(capture)으로 관찰
+    document.addEventListener('click',e=>{
+      if(e.target&&e.target.id==='enterPracticeBtn') log('practice_mode_entered');
+    },{capture:true});
+    // [WO-2026-012] 데모가 발행하는 진단 이벤트 수신(birth_* / first_chat_started / js_fatal_error)
+    document.addEventListener('mp-evidence',e=>{
+      if(e&&e.detail&&e.detail.t) log(e.detail.t, e.detail.d||null);
+    });
+    Object.entries(clickMap).forEach(([id,ev])=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('click',()=>log(ev),{capture:true});
+    });
+    document.querySelectorAll('.tabBtn').forEach(b=>{
+      b.addEventListener('click',()=>{
+        if(b.dataset.tab==='memory') log('memory_open');
+        else if(b.dataset.tab==='relationship') log('relationship_open');
+      },{capture:true});
+    });
+
+    // 3) 레벨업 관찰: levelBadge 텍스트 변화
+    const badge=document.getElementById('levelBadge');
+    if(badge){ let last=badge.textContent;
+      new MutationObserver(()=>{ const t=badge.textContent;
+        if(t!==last){ log('growth_levelup',{from:last,to:t}); last=t; }
+      }).observe(badge,{childList:true,characterData:true,subtree:true});
+    }
+
+    // 4) 관계 변화 관찰: intimacyVal/trustVal 텍스트 변화 → delta 계산
+    [['intimacyVal','intimacy'],['trustVal','trust']].forEach(([id,name])=>{
+      const el=document.getElementById(id);
+      if(!el) return; let last=parseFloat(el.textContent)||0;
+      new MutationObserver(()=>{ const v=parseFloat(el.textContent)||0;
+        if(v!==last){ log('relationship_change',{axis:name,delta:+(v-last).toFixed(2),to:v}); last=v; }
+      }).observe(el,{childList:true,characterData:true,subtree:true});
+    });
+
+    // 5) 기억 추가 관찰: 데모 state(LS 'myaipet-demo-v10')의 facts 배열 폴링(읽기 전용)
+    let factCount=null;
+    setInterval(()=>{
+      try{
+        const s=JSON.parse(localStorage.getItem('myaipet-demo-v10')||'null');
+        if(!s||!Array.isArray(s.facts)) return;
+        if(factCount===null){ factCount=s.facts.length; return; }
+        if(s.facts.length>factCount){
+          s.facts.slice(factCount).forEach(f=>log('memory_reference',{category:(f&&f.c)||'기타'}));
+          factCount=s.facts.length;
+        } else if(s.facts.length<factCount){ factCount=s.facts.length; }
+      }catch(e){}
+    },2000);
+
+    // 6) Export 버튼: JSON + Summary 동시 생성 (Evidence는 읽기만)
+    const btn=document.createElement('button');
+    btn.textContent='EV'; btn.title='Evidence 로그+Summary 내보내기';
+    btn.style.cssText='position:fixed;bottom:84px;right:6px;z-index:9999;opacity:.3;font-size:9px;padding:3px 5px;border-radius:6px;border:1px solid #bbb;background:rgba(255,255,255,.8);';
+    btn.onclick=()=>{
+      const arr=JSON.parse(localStorage.getItem(LOG_KEY)||'[]');
+      const count=t=>arr.filter(r=>r.Interaction===t).length;
+      const sessions=new Set(arr.filter(r=>r.Interaction==='session_start').map(r=>r.SessionID)).size||1;
+      let relStage=null;
+      try{ const s=JSON.parse(localStorage.getItem('myaipet-demo-v10')||'null');
+        if(s) relStage={intimacy:s.intimacy??null,trust:s.trust??null,level:s.level??null}; }catch(e){}
+      const summary={
+        loggerVersion:LOGGER_VERSION, schemaVersion:'1.1',
+        exportedAt:new Date().toISOString(), UserID,
+        totalSessions:sessions,
+        avgMessagesPerSession:+(count('user_message')/sessions).toFixed(1),
+        memoryOpen:count('memory_open'), relationshipOpen:count('relationship_open'),
+        cameraUsed:count('camera_used'), photoUsed:count('photo_used'),
+        voiceUsed:count('voice_used'), reflectionUsed:count('reflection_used'),
+        levelUps:count('growth_levelup'),
+        memoryReferences:count('memory_reference'),
+        practiceModeEntered:count('practice_mode_entered'),
+        currentRelationshipStage:relStage };
+      const payload={summary, events:arr};
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,1)],{type:'application/json'}));
+      a.download='myaipet_evidence_'+UserID+'_'+Date.now()+'.json'; a.click();
+    };
+    document.body.appendChild(btn);
+  }
+  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();
+})();
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+ const s=document.getElementById('skipDayBtn');
+ if(s) s.title='오늘의 기억을 정리합니다.';
+ const st=document.createElement('style');
+ st.textContent='#growthLog{position:absolute;right:10px;top:55px;z-index:40;background:rgba(255,255,255,.95);padding:10px;border-radius:10px;display:none;font-size:12px;line-height:1.5} body.emotion-happy #scene{filter:saturate(1.15)} body.emotion-sad #scene{filter:brightness(.9)}';
+ document.head.appendChild(st);
+ const g=document.createElement('div');g.id='growthLog';document.getElementById('app').appendChild(g);
+ s&&s.addEventListener('click',()=>setTimeout(()=>{g.innerHTML='<b>🌱 오늘의 성장</b><br>🧠 기억 +2<br>🤝 친밀도 +2<br>💙 신뢰도 +1<br>⭐ Reflection 완료';g.style.display='block';setTimeout(()=>g.style.display='none',5000)},4200));
+ const i=document.getElementById('textInput');
+ i&&i.addEventListener('input',()=>{document.body.classList.remove('emotion-happy','emotion-sad');if(/좋|행복|기뻐/.test(i.value))document.body.classList.add('emotion-happy');if(/슬|힘들|우울|아파/.test(i.value))document.body.classList.add('emotion-sad');});
+});
+</script>
+</body>
+</html>
