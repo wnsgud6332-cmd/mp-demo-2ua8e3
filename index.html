@@ -1077,7 +1077,7 @@
   })();
 
   // [VB-00 Naturalness] Voice별 최적 속도 매핑 (A/B: #spd-082/#spd-088/#spd-094/#spd-100 으로 전체 오버라이드)
-  const VOICE_SPEED = { 'Colton Rivers':0.94, 'Sitcom Girl':0.94, 'Caring Mother':0.88 };
+  const VOICE_SPEED = { 'Colton Rivers':0.85, 'Sitcom Girl':0.85, 'Caring Mother':0.80 }; // [Speed Sprint] 또렷한(0.97 rate) 체감에 맞춰 하향 — 변경 변수: Speed만
   (function(){
     const m = location.hash.match(/^#spd-(082|088|094|100)$/);
     if(m) localStorage.setItem('vb00_speed_override', (parseInt(m[1],10)/100).toFixed(2));
