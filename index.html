@@ -1266,8 +1266,9 @@
       stopWatchdog(); utterKeep.length = 0;
       const chain = ++speakChain;
       const mood = window.__lastMood || 'normal';
-      const baseRate  = mood==='emotional' ? 0.88 : mood==='happy' ? 1.08 : 0.98;
-      const basePitch = 1.28;
+      // [VB-00.5] 감정 강도 25% 축소 + 명료도 우선(과한 고음 제거 — 발음 뭉갬·피로 원인)
+      const baseRate  = mood==='emotional' ? 0.93 : mood==='happy' ? 1.03 : 0.97; // ±0.02 미세 조정 범위
+      const basePitch = 1.12; // 1.28 → 1.12: '작은 존재' 느낌은 유지하되 발음 왜곡 제거
 
       // 세그먼트 → 재생 큐(문장/침묵 평탄화)
       const queue = [];
@@ -1296,11 +1297,14 @@
           const u = new SpeechSynthesisUtterance(item.v);
           u.lang='ko-KR';
           if(petVoice) u.voice = petVoice;
-          u.rate  = baseRate  + (Math.random()*0.08-0.04);
-          u.pitch = basePitch + (Math.random()*0.12-0.06);
-          if(item.v.length<=4) u.pitch += 0.08;
+          u.rate  = baseRate  + (Math.random()*0.04-0.02); // 편차 절반 축소(안정된 명료도)
+          u.pitch = basePitch + (Math.random()*0.06-0.03);
+          if(item.v.length<=4) u.pitch += 0.05; // 짧은 감탄 끝올림도 완화
           utterKeep.push(u); // GC 방지 참조
-          const breath = 220 + (mood==='emotional'?200:60); // 문장 간 숨
+          // [VB-00.5] 종결부호별 차등 호흡 + 지터: . 300 / ? 500 / ! 400 / , 150 (±15%)
+          const tail = item.v.trim().slice(-1);
+          const base = tail==='?' ? 500 : tail==='!' ? 400 : tail===',' ? 150 : 300;
+          const breath = Math.round(base * (0.85 + Math.random()*0.3)) + (mood==='emotional'?120:0);
           let advanced = false;
           const advance = ()=>{ if(advanced) return; advanced=true;
             const i=utterKeep.indexOf(u); if(i>=0) utterKeep.splice(i,1);
@@ -1594,6 +1598,12 @@
     $('naming').style.display='none';
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_modal_closed'}}));
     $('voicePick').style.display='flex'; // 다음 단계: 목소리 고르기
+    // [VB-00.5] 기본 선택 = 또렷한 목소리 (사용자가 그대로 시작 가능, 바꾸고 싶으면 선택)
+    (function(){
+      const def=document.querySelector('.vpBtn[data-v="s"]');
+      if(def){ def.style.borderColor='var(--blue-deep)'; applyVoiceChoice('s'); updateVoiceBadge();
+        const st=$('voiceStartBtn'); st.disabled=false; st.style.background='var(--blue-deep)'; }
+    })();
     if(typeof preloadVoicePreviews==='function') preloadVoicePreviews(); // [VB-00.4] 백그라운드 사전 생성
   });
 
