@@ -991,6 +991,8 @@
       localStorage.setItem('vb00_engine','hume');
       // 내장 키 사용 — 별도 입력 불필요 (교체하려면 #key처럼 localStorage 'hume-api-key'에 저장)
     } else if(location.hash==='#voice-sys'){ localStorage.setItem('vb00_engine','system'); }
+    if(location.hash==='#voice-m'){ localStorage.setItem('vb00_gender','m'); localStorage.setItem('vb00_engine','hume'); }
+    else if(location.hash==='#voice-f'){ localStorage.setItem('vb00_gender','f'); localStorage.setItem('vb00_engine','hume'); }
     if(!localStorage.getItem('vb00_engine')) localStorage.setItem('vb00_engine','system');
   })();
   // [VB-00] 내장 Hume 키(분할 인코딩 — 스캐너 회피용, 실험 종료 후 반드시 revoke). 사용자 입력 키가 우선.
@@ -1009,15 +1011,17 @@
     try{ s = s.replace(new RegExp('[\\p{Extended_Pictographic}\\u{FE0F}\\u{200D}]','gu'),' '); }catch(e){}
     s = s.replace(/ {2,}/g,' ').trim();
     if(!s) return;
+    const g = localStorage.getItem('vb00_gender'); // m/f/미지정
+    const who = g==='m' ? '장난기 있는 소년 목소리의 작고 귀여운 동물 친구' : g==='f' ? '맑은 소녀 목소리의 작고 귀여운 동물 친구' : '작고 귀여운 동물 친구';
     const desc = mood==='emotional'
-      ? '작고 귀여운 동물 친구가 걱정스럽고 다정하게, 천천히 낮은 목소리로 위로하듯 한국어로 말한다'
+      ? who + '가 걱정스럽고 다정하게 위로하듯 한국어로 말한다'
       : mood==='happy'
-        ? '작고 귀여운 동물 친구가 신나서 밝고 통통 튀는 목소리로 한국어로 말한다'
-        : '작고 귀여운 동물 친구가 따뜻하고 자연스럽게 한국어로 말한다';
+        ? who + '가 신나서 밝고 통통 튀는 목소리로 한국어로 말한다'
+        : who + '가 따뜻하고 자연스럽게 한국어로 말한다';
     const resp = await fetch('https://api.hume.ai/v0/tts', {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'X-Hume-Api-Key': key },
-      body: JSON.stringify({ version:'2', utterances:[{ text:s, description:desc }] })
+      body: JSON.stringify({ version:'2', utterances:[{ text:s, description:desc, speed: (mood==='emotional' ? 1.05 : 1.25) }] })
     });
     if(!resp.ok) throw new Error('hume http '+resp.status);
     const data = await resp.json();
