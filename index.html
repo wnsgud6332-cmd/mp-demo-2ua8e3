@@ -316,6 +316,21 @@
       </div>
     </div>
 
+    <!-- 목소리 선택 (이름짓기 다음 단계) -->
+    <div id="voicePick" style="position:absolute;inset:0;background:rgba(10,14,24,.62);z-index:40;display:none;align-items:center;justify-content:center;">
+      <div style="background:var(--paper);border-radius:22px;padding:24px 20px;width:min(340px,86%);text-align:center;">
+        <div style="font-weight:800;font-size:19px;color:#2b2118;margin-bottom:4px;">목소리를 골라주세요</div>
+        <div style="font-size:12px;color:#7a6f5d;margin-bottom:12px;">누르면 들어볼 수 있어요</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button class="vpBtn" data-v="f" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🐰 여자아이 목소리</button>
+          <button class="vpBtn" data-v="m" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🐶 남자아이 목소리</button>
+          <button class="vpBtn" data-v="n" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">✨ 포근한 목소리</button>
+          <button class="vpBtn" data-v="s" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🔈 또렷한 목소리</button>
+        </div>
+        <button id="voiceStartBtn" disabled style="margin-top:14px;width:100%;border:none;border-radius:12px;padding:13px;background:#cabfa8;color:#fff;font-weight:800;font-size:16px;cursor:pointer;font-family:inherit;">이 목소리로 시작</button>
+      </div>
+    </div>
+
     <div id="panel">
       <div id="panelHandle"></div>
       <div id="tabs">
@@ -1386,7 +1401,36 @@
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_name_saved'}}));
     $('naming').style.display='none';
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_modal_closed'}}));
+    $('voicePick').style.display='flex'; // 다음 단계: 목소리 고르기
+  });
+
+  // ---- 목소리 선택 (온보딩 2단계) ----
+  function applyVoiceChoice(vv){
+    if(vv==='s'){ localStorage.setItem('vb00_engine','system'); localStorage.removeItem('vb00_gender'); }
+    else{
+      localStorage.setItem('vb00_engine','hume');
+      if(vv==='m') localStorage.setItem('vb00_gender','m');
+      else if(vv==='f') localStorage.setItem('vb00_gender','f');
+      else localStorage.removeItem('vb00_gender');
+    }
+  }
+  document.querySelectorAll('.vpBtn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('.vpBtn').forEach(x=>x.style.borderColor='#e0d6c2');
+      b.style.borderColor='var(--blue-deep)';
+      applyVoiceChoice(b.dataset.v);
+      window.__lastMood='happy';
+      speak('안녕! 나 이런 목소리야.'); // 미리듣기
+      const s=$('voiceStartBtn'); s.disabled=false; s.style.background='var(--blue-deep)';
+      document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_previewed',d:{v:b.dataset.v}}}));
+    });
+  });
+  $('voiceStartBtn').addEventListener('click', ()=>{
+    $('voicePick').style.display='none';
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_selected',d:{engine:localStorage.getItem('vb00_engine'),gender:localStorage.getItem('vb00_gender')||'n'}}}));
+    const v = state.petName;
     const hello = '안녕! 나는 ' + v + '야. 오늘부터 쭉 같이 있을 거야. 오늘 하루는 어땠어?';
+    window.__lastMood='normal';
     addMsg(hello, 'pet'); showBubble(hello); speak(hello);
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'first_chat_started'}}));
     state.lastVisit = new Date().toISOString();
