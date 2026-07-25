@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v14.1';
+  const APP_VER = 'v14.2';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1317,8 +1317,13 @@
         const reqUrl = ST_BASE+'/v2/voices?model=ssfm-v30';
         log('요청 URL: '+reqUrl);
         const r=await fetch(reqUrl,{headers:{'X-API-KEY':getStKey()}});
+        const pv=r.headers.get('X-Proxy-Ver'), fw=r.headers.get('X-Forward-Url');
+        log('Worker 버전: '+(pv||'(헤더 없음 → 옛 코드 실행 중 = 교체 필요)'));
+        if(fw) log('Forward URL: '+fw);
         log('① 보이스 목록: HTTP '+r.status+(r.ok?' ✅':' ❌'));
-        if(!r.ok){ const body=await r.text(); log('   응답 본문: '+String(body).slice(0,180)); }
+        if(!r.ok){ const body=await r.text();
+          log('   Content-Type: '+(r.headers.get('Content-Type')||'(없음)')+' | 본문 '+body.length+' bytes');
+          log('   응답 본문: '+(body?String(body).slice(0,180):'(빈 본문)')); }
         if(r.ok){
           const d=await r.json();
           const arr=Array.isArray(d)?d:(d.voices||d.items||[]);
