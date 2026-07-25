@@ -1076,48 +1076,103 @@
     if(!localStorage.getItem('vb00_speed')) localStorage.setItem('vb00_speed','0.95');
   })();
 
+  // [VB-00 Naturalness] Voice별 최적 속도 매핑 (A/B: #spd-082/#spd-088/#spd-094/#spd-100 으로 전체 오버라이드)
+  const VOICE_SPEED = { 'Colton Rivers':0.94, 'Sitcom Girl':0.94, 'Caring Mother':0.88 };
+  (function(){
+    const m = location.hash.match(/^#spd-(082|088|094|100)$/);
+    if(m) localStorage.setItem('vb00_speed_override', (parseInt(m[1],10)/100).toFixed(2));
+    if(location.hash==='#spd-auto') localStorage.removeItem('vb00_speed_override');
+  })();
+
+  // [작업5] 한국어 전처리 강화
+  function preprocessKorean(text){
+    let s = String(text||'');
+    s = s.replace(/\([^)]*\)/g,' ').replace(/\[[^\]]*\]/g,' ');       // 지문
+    s = s.replace(/[ㅎㅋㅠㅜ]{1,}/g,' ').replace(/\^\^+/g,' ').replace(/~+/g,''); // 웃음·물결
+    try{ s = s.replace(new RegExp('[\\p{Extended_Pictographic}\\u{FE0F}\\u{200D}]','gu'),' '); }catch(e){}
+    s = s.replace(/!{2,}/g,'!').replace(/\?{2,}/g,'?').replace(/\.{4,}/g,'…');   // 연속 부호 축약
+    s = s.replace(/\bAI\b/g,'에이아이').replace(/\bAR\b/g,'에이알').replace(/\bAPI\b/g,'에이피아이').replace(/\bOK\b/gi,'오케이'); // 영어 약어
+    s = s.replace(/ {2,}/g,' ').trim();
+    return s;
+  }
+
+  // [작업3] 문장·길이 기반 분할 (40~60자 초과 시 쉼표에서 재분할)
+  function chunkKorean(s){
+    let parts;
+    try{ parts = s.split(new RegExp('(?<=[.!?…])\\s+')).filter(x=>x.trim()); }
+    catch(e){ parts = s.split(/(?<=[.!?])\s/).filter(x=>x.trim()); }
+    const out=[];
+    for(const p of parts){
+      if(p.length<=60){ out.push(p.trim()); continue; }
+      let buf='';
+      for(const seg of p.split(/(?<=,)\s*/)){
+        if((buf+seg).length>60 && buf){ out.push(buf.trim()); buf=seg; }
+        else buf+=(buf?' ':'')+seg;
+      }
+      if(buf.trim()) out.push(buf.trim());
+    }
+    return out;
+  }
+
+  // [작업4] 종결부호별 Pause(trailing_silence, 초)
+  function pauseAfter(chunk){
+    const last = chunk.trim().slice(-1);
+    if(last==='?') return 0.5;
+    if(last==='!') return 0.4;
+    if(last==='.'||last==='…') return 0.3;
+    if(last===',') return 0.13;
+    return 0.25;
+  }
+
   async function speakHume(text, mood){
     const key = getHumeKey();
-    let s = String(text||'').replace(/\([^)]*\)/g,' ').replace(/[ㅎㅋ]{2,}/g,' ').replace(/\^\^+/g,' ');
-    try{ s = s.replace(new RegExp('[\\p{Extended_Pictographic}\\u{FE0F}\\u{200D}]','gu'),' '); }catch(e){}
-    s = s.replace(/ {2,}/g,' ').trim();
+    const s = preprocessKorean(text);
     if(!s) return;
-    // [지시] 화자는 Voice ID가 정의. description은 emotion/style만 (화자 묘사 보류)
-    const desc = mood==='emotional' ? 'Speaking slowly and tenderly with caring concern, in natural Korean.'
-               : mood==='happy' ? 'Speaking brightly with warm excitement, in natural Korean.'
-               : 'Speaking warmly and naturally, in natural Korean.';
-    const speed = parseFloat(localStorage.getItem('vb00_speed')||'0.95'); // 고정 — 자동조절 없음
     const voiceName = presetVoice();
     const mappedId = voiceName ? voiceMap()[voiceName] : null;
     console.log('Selected Voice ID :', mappedId || voiceName || '(none)');
-    const utter = { text:s, description:desc, speed:speed };
-    if(mappedId) utter.voice = { id: mappedId };
-    else if(voiceName) utter.voice = { name: voiceName, provider:'HUME_AI' };
-    console.log('Sending Voice ID :', (utter.voice&&(utter.voice.id||utter.voice.name))||'(none)');
+    // [작업2] 속도: 전역 오버라이드(A/B) > Voice별 매핑 > 0.94
+    const speed = parseFloat(localStorage.getItem('vb00_speed_override') || VOICE_SPEED[voiceName] || '0.94');
+    // [작업1] Description 최소화 — 감정은 Voice가 표현한다
+    const desc = 'Natural conversational Korean.';
+    // [작업3+4] 청크 → utterances 배열 (한 요청, trailing_silence로 호흡)
+    const chunks = chunkKorean(s);
+    const utterances = chunks.map((ch, i)=>{
+      const u = { text: ch, speed: speed, trailing_silence: pauseAfter(ch) };
+      if(i===0){
+        u.description = desc;
+        if(mappedId) u.voice = { id: mappedId };
+        else if(voiceName) u.voice = { name: voiceName, provider:'HUME_AI' };
+      }
+      return u;
+    });
+    console.log('Sending Voice ID :', (utterances[0].voice&&(utterances[0].voice.id||utterances[0].voice.name))||'(none)');
     const t0 = Date.now();
     const resp = await fetch('https://api.hume.ai/v0/tts', {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'X-Hume-Api-Key': key },
-      body: JSON.stringify({ version:'1', utterances:[utter] })
+      body: JSON.stringify({ version:'1', utterances: utterances })
     });
     if(!resp.ok) throw new Error('hume http '+resp.status);
     const data = await resp.json();
-    const gen = data && data.generations && data.generations[0];
-    const b64 = gen && gen.audio;
-    if(!b64) throw new Error('hume no audio');
+    const gens = (data && data.generations) || [];
+    if(!gens.length || !gens[0].audio) throw new Error('hume no audio');
     const latency = Date.now()-t0;
-    console.log('Actually Used Voice :', (gen&&gen.voice&&(gen.voice.id||gen.voice.name)) || (utter.voice&&(utter.voice.id||utter.voice.name)) || '(dynamic)');
-    // [VB-00.1 Debug] 사실 표시: 실제 Voice가 프리셋마다 다른지 화면으로 확인
-    const actuallyUsed = (gen&&gen.voice&&(gen.voice.id||gen.voice.name)) || (utter.voice&&(utter.voice.id||utter.voice.name)) || 'DYNAMIC';
-    showVoiceDebug(
-      'Sent: ' + ((utter.voice&&(utter.voice.id||utter.voice.name))||'(none)').slice(0,20) + '\n' +
-      'Used: ' + String(actuallyUsed).slice(0,20) + '\n' +
-      'Preset: ' + (localStorage.getItem('vb00_gender')||'n') + '  Speed: ' + speed + '  Emotion: ' + mood + '\n' +
-      'Latency: ' + latency + 'ms  Fallback: NO');
-    window.__lastGenerationId = gen.generation_id || null; // 마음에 든 목소리 저장용
+    const used = (gens[0].voice&&(gens[0].voice.id||gens[0].voice.name)) || (utterances[0].voice&&(utterances[0].voice.id||utterances[0].voice.name)) || 'DYNAMIC';
+    console.log('Actually Used Voice :', used);
+    showVoiceDebug('Sent: '+((utterances[0].voice&&(utterances[0].voice.id||utterances[0].voice.name))||'(none)').slice(0,20)
+      +'\nUsed: '+String(used).slice(0,20)
+      +'\nSpeed: '+speed+'  Chunks: '+chunks.length+'  Latency: '+latency+'ms  Fallback: NO');
+    // 생성 결과(여러 generation이면 순차) 재생
     if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
-    humeAudio = new Audio('data:audio/mp3;base64,'+b64);
-    await humeAudio.play();
+    const clips = gens.filter(g=>g.audio).map(g=>'data:audio/mp3;base64,'+g.audio);
+    for(const src of clips){
+      await new Promise((resolve)=>{
+        humeAudio = new Audio(src);
+        humeAudio.onended = resolve; humeAudio.onerror = resolve;
+        humeAudio.play().catch(resolve);
+      });
+    }
   }
 
   // [VB-00.1] 보이스 라이브러리 조회 도구 — #voices 로 열면 목록을 화면+EV 로그에 기록
