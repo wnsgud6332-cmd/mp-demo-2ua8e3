@@ -1019,6 +1019,19 @@
 
   // Hume Octave TTS 어댑터 — VB-00.1: Voice ID 선택 → Description 적용 순서
   let humeAudio = null;
+  function updateVoiceBadge(){
+    try{
+      if(vb00Engine()!=='hume'){ const e=document.getElementById('voiceIdBadge'); if(e) e.remove(); return; }
+      const name = presetVoice();
+      const id = name ? (voiceMap()[name]||'(ID 조회중…)') : '(미지정)';
+      let el=document.getElementById('voiceIdBadge');
+      if(!el){ el=document.createElement('div'); el.id='voiceIdBadge';
+        el.style.cssText='position:fixed;top:8px;right:8px;z-index:99997;background:rgba(0,0,0,.6);color:#9ef;font-size:9px;line-height:1.5;padding:4px 7px;border-radius:6px;pointer-events:none;white-space:pre;text-align:right;';
+        document.body.appendChild(el); }
+      el.textContent = 'Current Voice\n' + (name||'—') + '\nID: ' + String(id).slice(0,12) + (String(id).length>12?'…':'');
+    }catch(e){}
+  }
+  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',updateVoiceBadge):setTimeout(updateVoiceBadge,0);
   function showVoiceDebug(msg){ // [진단용 — VB-00.1]
     try{
       let el=document.getElementById('voiceDebug');
@@ -1038,6 +1051,18 @@
     f: 'Sitcom Girl',          // 여자아이: 밝고 높은 여성 음색 (백업: 'Friendly Kiwi Girl')
     n: 'Caring Mother',        // 포근한: 이름 그대로 (백업: 'Warm Welsh Lady')
   };
+  // name→id 매핑 캐시 (부팅 시 1회 백그라운드 조회 — ID 표시·검증용)
+  function voiceMap(){ try{ return JSON.parse(localStorage.getItem('hume_voice_map')||'{}'); }catch(e){ return {}; } }
+  (function(){
+    if(localStorage.getItem('vb00_engine')!=='hume') return;
+    if(Object.keys(voiceMap()).length) return;
+    fetch('https://api.hume.ai/v0/tts/voices?provider=HUME_AI&page_size=100', { headers:{ 'X-Hume-Api-Key': getHumeKey() }})
+      .then(r=>r.json()).then(d=>{
+        const map={}; (d.voices_page||d.voices||[]).forEach(v=>{ if(v.name&&v.id) map[v.name]=v.id; });
+        if(Object.keys(map).length) localStorage.setItem('hume_voice_map', JSON.stringify(map));
+        updateVoiceBadge();
+      }).catch(()=>{});
+  })();
   function presetVoice(){
     const g = localStorage.getItem('vb00_gender'); // m/f/미지정(n)
     const key = g==='m' ? 'vb00_voice_m' : g==='f' ? 'vb00_voice_f' : 'vb00_voice_n';
@@ -1057,18 +1082,18 @@
     try{ s = s.replace(new RegExp('[\\p{Extended_Pictographic}\\u{FE0F}\\u{200D}]','gu'),' '); }catch(e){}
     s = s.replace(/ {2,}/g,' ').trim();
     if(!s) return;
-    const g = localStorage.getItem('vb00_gender');
-    const who = g==='m' ? 'A playful young boy puppy character with a noticeably low, energetic voice'
-              : g==='f' ? 'A sweet young girl bunny character with a noticeably high, clear, cute voice'
-              : 'A soft, warm little animal companion with a gentle cozy voice';
-    const tone = mood==='emotional' ? ', speaking slowly and tenderly with caring concern'
-               : mood==='happy' ? ', speaking brightly with bouncy excitement'
-               : ', speaking warmly and naturally';
-    const desc = who + tone + '. Speaks fluent natural Korean.';
+    // [지시] 화자는 Voice ID가 정의. description은 emotion/style만 (화자 묘사 보류)
+    const desc = mood==='emotional' ? 'Speaking slowly and tenderly with caring concern, in natural Korean.'
+               : mood==='happy' ? 'Speaking brightly with warm excitement, in natural Korean.'
+               : 'Speaking warmly and naturally, in natural Korean.';
     const speed = parseFloat(localStorage.getItem('vb00_speed')||'0.95'); // 고정 — 자동조절 없음
-    const voiceSpec = presetVoice();
+    const voiceName = presetVoice();
+    const mappedId = voiceName ? voiceMap()[voiceName] : null;
+    console.log('Selected Voice ID :', mappedId || voiceName || '(none)');
     const utter = { text:s, description:desc, speed:speed };
-    if(voiceSpec) utter.voice = /^[0-9a-f-]{20,}$/i.test(voiceSpec) ? { id: voiceSpec } : { name: voiceSpec, provider:'HUME_AI' };
+    if(mappedId) utter.voice = { id: mappedId };
+    else if(voiceName) utter.voice = { name: voiceName, provider:'HUME_AI' };
+    console.log('Sending Voice ID :', (utter.voice&&(utter.voice.id||utter.voice.name))||'(none)');
     const t0 = Date.now();
     const resp = await fetch('https://api.hume.ai/v0/tts', {
       method:'POST',
@@ -1081,6 +1106,7 @@
     const b64 = gen && gen.audio;
     if(!b64) throw new Error('hume no audio');
     const latency = Date.now()-t0;
+    console.log('Actually Used Voice :', (gen&&gen.voice&&(gen.voice.id||gen.voice.name)) || (utter.voice&&(utter.voice.id||utter.voice.name)) || '(dynamic)');
     // [VB-00.1 Debug] 사실 표시: 실제 Voice가 프리셋마다 다른지 화면으로 확인
     showVoiceDebug(
       'Voice: ' + (voiceSpec || 'DYNAMIC(매번 새 목소리 — ID 미지정)') + '\n' +
@@ -1484,7 +1510,7 @@
     b.addEventListener('click', ()=>{
       document.querySelectorAll('.vpBtn').forEach(x=>x.style.borderColor='#e0d6c2');
       b.style.borderColor='var(--blue-deep)';
-      applyVoiceChoice(b.dataset.v);
+      applyVoiceChoice(b.dataset.v); updateVoiceBadge();
       window.__lastMood='happy';
       speak('안녕. 오늘 하루는 어땠어?'); // [VB-00.1] 전 프리셋 동일 문장 — 변수는 Voice 하나
       const s=$('voiceStartBtn'); s.disabled=false; s.style.background='var(--blue-deep)';
