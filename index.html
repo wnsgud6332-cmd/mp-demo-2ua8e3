@@ -1032,11 +1032,17 @@
 
   // 프리셋별 Voice ID (라이브러리 확인 후 확정 — localStorage로 즉시 오버라이드 가능)
   // 설정법: localStorage.setItem('vb00_voice_m','<voice_name_or_id>')
+  // [VB-00.1 확정] 라이브러리 실목록(2026-07-25 캡처)에서 배정 — 세 개의 서로 다른 존재
+  const VOICE_PRESETS = {
+    m: 'Colton Rivers',        // 남자아이: 명확한 남성 음색 (백업: 'Cheerful Irishman')
+    f: 'Sitcom Girl',          // 여자아이: 밝고 높은 여성 음색 (백업: 'Friendly Kiwi Girl')
+    n: 'Caring Mother',        // 포근한: 이름 그대로 (백업: 'Warm Welsh Lady')
+  };
   function presetVoice(){
     const g = localStorage.getItem('vb00_gender'); // m/f/미지정(n)
     const key = g==='m' ? 'vb00_voice_m' : g==='f' ? 'vb00_voice_f' : 'vb00_voice_n';
     const v = (localStorage.getItem(key)||'').trim();
-    return v || null; // null이면 동적 생성(현 상태) — Debug에 'DYNAMIC'으로 표시되어 문제가 가시화됨
+    return v || VOICE_PRESETS[g==='m'?'m':g==='f'?'f':'n'] || null;
   }
   // 포근한(및 전 프리셋) 속도: 자동조절 제거, 고정값. #warm-090/#warm-095/#warm-100 으로 블라인드 조건 전환
   (function(){
@@ -1100,6 +1106,7 @@
         pre.textContent='[Hume Voice Library — 이 화면을 캡처해서 전달]\n\n'+(list||JSON.stringify(d).slice(0,2000));
         pre.onclick=()=>pre.remove();
         document.body.appendChild(pre);
+        try{ history.replaceState(null,'',location.pathname); }catch(e){} // 해시 제거 — 다음부터 안 뜸
       }catch(e){ showVoiceDebug('voices 조회 실패: '+e.message); }
     }, 800);
   }
