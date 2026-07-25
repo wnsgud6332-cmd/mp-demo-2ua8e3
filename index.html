@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v14.0';
+  const APP_VER = 'v14.1';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1314,14 +1314,17 @@
       const log=(s)=>{ box.textContent+='\n'+s; };
       log('엔진 설정: '+localStorage.getItem('vb00_engine')+' | 슬롯: '+(localStorage.getItem('st_slot')||'(미선택→f)')+' | 키 끝4: …'+getStKey().slice(-4));
       try{
-        const r=await fetch(ST_BASE+'/v2/voices?model=ssfm-v30',{headers:{'X-API-KEY':getStKey()}});
-        log('① 검색 API: HTTP '+r.status+(r.ok?' ✅':' ❌'));
+        const reqUrl = ST_BASE+'/v2/voices?model=ssfm-v30';
+        log('요청 URL: '+reqUrl);
+        const r=await fetch(reqUrl,{headers:{'X-API-KEY':getStKey()}});
+        log('① 보이스 목록: HTTP '+r.status+(r.ok?' ✅':' ❌'));
+        if(!r.ok){ const body=await r.text(); log('   응답 본문: '+String(body).slice(0,180)); }
         if(r.ok){
           const d=await r.json();
           const arr=Array.isArray(d)?d:(d.voices||d.items||[]);
           const names=arr.map(v=>v.voice_name||v.name);
           log('   보이스 '+arr.length+'건. 강일:'+(names.includes('강일')?'✅':'❌')+' 이현:'+(names.includes('이현')?'✅':'❌')+' 몽실이:'+(names.includes('몽실이')?'✅':'❌')+' 억울이:'+(names.includes('억울이')?'✅':'❌'));
-        } else { log('   '+String(await r.text()).slice(0,140)); }
+        }
       }catch(e){ log('① 검색 API: ❌ '+e.message+' — CORS 차단이면 여기서 TypeError'); }
       try{
         const v=await resolveStVoice(localStorage.getItem('st_slot')||'f');
