@@ -943,32 +943,81 @@
     ttsPrimed = true;
     try{ const u=new SpeechSynthesisUtterance(''); u.volume=0; window.speechSynthesis.speak(u); }catch(e){}
   }, {once:false});
+  // ================= Voice Layer (내부 CTO Voice Sprint) =================
+  // 정책: Display Text ≠ Speech Text. 화면의 이모지·…·ㅎㅎ·(웃음)은 감정 요소로 유지하되
+  // 음성에서는 절대 읽지 않는다 — 침묵·호흡·억양으로 대체한다.
+
+  // Speech Preprocessor: Display Text → [{t:'speak',v}|{t:'pause',ms}] 세그먼트
+  function toSpeechSegments(text){
+    let s = String(text||'');
+    // 1) 괄호 지문 제거: (웃음) [메모] 등 — 읽으면 이상한 문자열
+    s = s.replace(/\([^)]*\)/g,' ').replace(/\[[^\]]*\]/g,' ');
+    // 2) 웃음 표기·이모티콘 문자 제거: ㅎㅎ ㅋㅋ ^^ ~ 등
+    s = s.replace(/[ㅎㅋ]{1,}/g,' ').replace(/\^\^+/g,' ').replace(/~+/g,'');
+    // 3) 이모지·기호 제거 (화면 전용)
+    try{ s = s.replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu,' '); }catch(e){}
+    // 4) 말줄임(…, ...)은 삭제가 아니라 "침묵 0.8초"로 치환
+    const parts = s.split(/(\u2026|\.{3,})/);
+    const segs = [];
+    for(const p of parts){
+      if(!p) continue;
+      if(/^(\u2026|\.{3,})$/.test(p)){ segs.push({t:'pause', ms:800}); continue; }
+      const clean = p.replace(/ {2,}/g,' ').trim();
+      if(clean) segs.push({t:'speak', v:clean});
+    }
+    return segs;
+  }
+
+  // 펫 음색: ko-KR 보이스 중 자연스러운 것 우선 선택(기기별 상이 — 런타임 선정)
+  let petVoice = null;
+  function pickPetVoice(){
+    try{
+      const vs = window.speechSynthesis.getVoices().filter(v=>/ko/i.test(v.lang));
+      if(!vs.length) return;
+      // 선호 순: Google(안드), Yuna/Sora(iOS), 그 외 첫 번째
+      petVoice = vs.find(v=>/google/i.test(v.name)) || vs.find(v=>/yuna|sora/i.test(v.name)) || vs[0];
+    }catch(e){}
+  }
+  if('speechSynthesis' in window){
+    pickPetVoice();
+    try{ window.speechSynthesis.onvoiceschanged = pickPetVoice; }catch(e){}
+  }
+
+  let speakChain = 0; // 최신 발화만 재생(이전 체인 무효화)
   function speak(text){
     if(!state.ttsOn || !('speechSynthesis' in window)) return;
     try{
-      // [TTS 전용] 이모지·기호는 화면에만 두고 음성으로는 읽지 않는다
-      try{ text = text.replace(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]/gu,'').replace(/ {2,}/g,' ').trim(); }catch(e){}
-      if(!text) return;
       window.speechSynthesis.cancel();
-      // [생명감] 문장 단위 분리 — 문장마다 억양·속도 미세 변화 + 숨 같은 짧은 pause
+      const chain = ++speakChain;
       const mood = window.__lastMood || 'normal';
-      const baseRate = mood==='emotional' ? 0.90 : mood==='happy' ? 1.06 : 1.0;
-      let sentences;
-      try{ sentences = text.split(new RegExp('(?<=[.!?\u2026])\\s+')).filter(s=>s.trim()); }
-      catch(e){ sentences = text.split(/[.!?]\s+/).filter(s=>s.trim()); } // lookbehind 미지원 폴백
-      let delay = 0;
-      sentences.forEach((s, i)=>{
-        setTimeout(()=>{
-          try{
-            const u = new SpeechSynthesisUtterance(s.trim());
-            u.lang='ko-KR';
-            u.rate = baseRate + (Math.random()*0.08 - 0.04);   // 문장마다 다른 호흡
-            u.pitch = 1.12 + (Math.random()*0.1 - 0.05);       // 동일 억양 금지
-            window.speechSynthesis.speak(u);
-          }catch(e){}
-        }, delay);
-        delay += 300 + s.length*55 + (mood==='emotional'?250:80); // 문장 간 숨 pause
-      });
+      // 어린 동물 같은 음색: 높은 pitch 기반 + 감정별 속도
+      const baseRate  = mood==='emotional' ? 0.88 : mood==='happy' ? 1.08 : 0.98;
+      const basePitch = 1.28; // 성체 아나운서가 아니라 작은 존재의 목소리
+      const segs = toSpeechSegments(text);
+      let delay = mood==='emotional' ? 500 : 120; // 첫 호흡
+      for(const seg of segs){
+        if(seg.t==='pause'){ delay += seg.ms; continue; }
+        // 문장 단위 분리(억양 다양화). lookbehind 미지원 기기 폴백 포함
+        let sentences;
+        try{ sentences = seg.v.split(new RegExp('(?<=[.!?])\\s+')).filter(x=>x.trim()); }
+        catch(e){ sentences = seg.v.split(/[.!?]\s+/).filter(x=>x.trim()); }
+        for(const sent of sentences){
+          setTimeout(()=>{
+            if(chain!==speakChain) return; // 새 발화가 시작되면 이전 체인 중단
+            try{
+              const u = new SpeechSynthesisUtterance(sent.trim());
+              u.lang='ko-KR';
+              if(petVoice) u.voice = petVoice;
+              u.rate  = baseRate  + (Math.random()*0.08-0.04); // 문장마다 다른 호흡
+              u.pitch = basePitch + (Math.random()*0.12-0.06); // 동일 억양 금지
+              // 문장 끝 자연스러운 낙하: 짧은 문장(감탄)은 살짝 올리고, 긴 문장은 기본
+              if(sent.trim().length<=4) u.pitch += 0.08;
+              window.speechSynthesis.speak(u);
+            }catch(e){}
+          }, delay);
+          delay += 280 + sent.length*55 + (mood==='emotional'?220:60); // 문장 간 숨
+        }
+      }
     }catch(e){}
   }
 
