@@ -1015,7 +1015,7 @@
       }, 3000);
 
       let idx = 0;
-      const firstBreath = mood==='emotional' ? 500 : 120;
+      const firstBreath = mb01Condition()==='A' ? 0 : (mood==='emotional' ? 500 : 120);
       function playNext(){
         if(chain!==speakChain){ stopWatchdog(); return; }
         if(idx>=queue.length){ stopWatchdog(); return; }
@@ -1173,6 +1173,13 @@
 
   // ---------------- Delivery: Emotion Timing (내부 CTO Sprint) ----------------
   // Product Core DeliveryPolicy와 동일 원칙: 인사=즉시, 감정=생각하는 시간, 회상=자연스러운 pause
+  // [MB-01] 실험 조건: A=No Pause, B=Pause. URL 해시로 인터뷰어가 배정(#mb-a/#mb-b), localStorage 유지.
+  (function(){
+    if(location.hash==='#mb-a') localStorage.setItem('mb01_condition','A');
+    else if(location.hash==='#mb-b') localStorage.setItem('mb01_condition','B');
+    if(!localStorage.getItem('mb01_condition')) localStorage.setItem('mb01_condition','B');
+  })();
+  function mb01Condition(){ return localStorage.getItem('mb01_condition')||'B'; }
   function classifyMood(text){
     const t=(text||'').trim();
     if(/^(안녕|하이|왔|다녀왔|좋은 아침|잘 잤)/.test(t)) return 'greeting';
@@ -1181,6 +1188,7 @@
     return 'normal';
   }
   function deliveryDelay(mood){
+    if(mb01Condition()==='A') return 80; // [MB-01] A: No Pause — 즉답(전송 왕복 외 지연 없음)
     // 고정값 금지 — 지터 포함 자연 변동
     const j=(a,b)=>a+Math.random()*(b-a);
     if(mood==='greeting') return j(120,300);
@@ -1242,7 +1250,7 @@
     {
       const mood = classifyMood(text);
       const wait = deliveryDelay(mood);
-      const th = (mood==='emotional'||mood==='normal') ? showThinking() : null;
+      const th = (mb01Condition()==='B' && (mood==='emotional'||mood==='normal')) ? showThinking() : null;
       await new Promise(r=>setTimeout(r, wait));
       if(th) th.remove();
       window.__lastMood = mood; // speak()가 참조
@@ -1377,7 +1385,7 @@
       localStorage.setItem(LOG_KEY, JSON.stringify(arr));
     }catch(e){/* 로깅 실패가 제품을 막지 않는다 */}
   }
-  log('session_start',{returnVisit: !!localStorage.getItem(LOG_KEY)});
+  log('session_start',{returnVisit: !!localStorage.getItem(LOG_KEY), mb01: localStorage.getItem('mb01_condition')||'B'});
   window.addEventListener('beforeunload',()=>log('session_end'));
 
   function init(){
@@ -1466,6 +1474,7 @@
         levelUps:count('growth_levelup'),
         memoryReferences:count('memory_reference'),
         practiceModeEntered:count('practice_mode_entered'),
+        mb01Condition: localStorage.getItem('mb01_condition')||'B',
         currentRelationshipStage:relStage };
       const payload={summary, events:arr};
       const a=document.createElement('a');
