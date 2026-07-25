@@ -1108,10 +1108,12 @@
     const latency = Date.now()-t0;
     console.log('Actually Used Voice :', (gen&&gen.voice&&(gen.voice.id||gen.voice.name)) || (utter.voice&&(utter.voice.id||utter.voice.name)) || '(dynamic)');
     // [VB-00.1 Debug] 사실 표시: 실제 Voice가 프리셋마다 다른지 화면으로 확인
+    const actuallyUsed = (gen&&gen.voice&&(gen.voice.id||gen.voice.name)) || (utter.voice&&(utter.voice.id||utter.voice.name)) || 'DYNAMIC';
     showVoiceDebug(
-      'Voice: ' + (voiceSpec || 'DYNAMIC(매번 새 목소리 — ID 미지정)') + '\n' +
-      'Preset: ' + (g||'n') + '  Speed: ' + speed + '  Emotion: ' + mood + '\n' +
-      'Latency: ' + latency + 'ms  Fallback: NO' + (gen.generation_id ? '\nGenID: '+String(gen.generation_id).slice(0,18)+'…' : ''));
+      'Sent: ' + ((utter.voice&&(utter.voice.id||utter.voice.name))||'(none)').slice(0,20) + '\n' +
+      'Used: ' + String(actuallyUsed).slice(0,20) + '\n' +
+      'Preset: ' + (localStorage.getItem('vb00_gender')||'n') + '  Speed: ' + speed + '  Emotion: ' + mood + '\n' +
+      'Latency: ' + latency + 'ms  Fallback: NO');
     window.__lastGenerationId = gen.generation_id || null; // 마음에 든 목소리 저장용
     if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
     humeAudio = new Audio('data:audio/mp3;base64,'+b64);
