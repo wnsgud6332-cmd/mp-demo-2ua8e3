@@ -1008,12 +1008,13 @@
     } else if(location.hash==='#voice-sys'){ localStorage.setItem('vb00_engine','system'); }
     if(location.hash==='#voice-m'){ localStorage.setItem('vb00_gender','m'); localStorage.setItem('vb00_engine','hume'); }
     else if(location.hash==='#voice-f'){ localStorage.setItem('vb00_gender','f'); localStorage.setItem('vb00_engine','hume'); }
-    if(!localStorage.getItem('vb00_engine')) localStorage.setItem('vb00_engine','system');
+    // [v13.2] 엔진 마이그레이션: 이전 저장값(hume/voiceA/system)과 무관하게 수퍼톤이 공식 엔진
+    if(localStorage.getItem('vb00_engine')!=='supertone') localStorage.setItem('vb00_engine','supertone');
   })();
   // [VB-00] 내장 Hume 키(분할 인코딩 — 스캐너 회피용, 실험 종료 후 반드시 revoke). 사용자 입력 키가 우선.
   const BUILTIN_HUME_KEY = atob('VWl5UkM4VlVMZ0dpbkdtUzVMNWtSTmhv'+'bkplQmloNkdxV2REN0F6V1dydUFrR2dO');
   function getHumeKey(){ return ((localStorage.getItem('hume-api-key')||'').trim()) || BUILTIN_HUME_KEY; }
-  if(!localStorage.getItem('vb00_engine')) localStorage.setItem('vb00_engine','supertone'); // [v13] 기본 = 수퍼톤
+  if(localStorage.getItem('vb00_engine')!=='supertone') localStorage.setItem('vb00_engine','supertone'); // [v13.2] 공식 엔진 강제
   function vb00Engine(){
     const e = localStorage.getItem('vb00_engine');
     return (e==='hume'||e==='voiceA'||e==='supertone') ? e : 'system';
@@ -1272,6 +1273,41 @@
       });
     }
   }
+
+  // [v13.2] #stdiag — 수퍼톤 3단 자가진단 (키 / 이름검색 / TTS생성)
+  if(location.hash==='#stdiag'){
+    setTimeout(async ()=>{
+      const box=document.createElement('div');
+      box.style.cssText='position:fixed;inset:14px;z-index:99999;background:#171512;color:#eee;overflow:auto;padding:14px;border-radius:10px;font-size:13px;white-space:pre-wrap;';
+      box.textContent='수퍼톤 진단 시작…\n(닫으려면 화면 탭)';
+      box.onclick=()=>{ box.remove(); history.replaceState(null,'',location.pathname); };
+      document.body.appendChild(box);
+      const log=(s)=>{ box.textContent+='\n'+s; };
+      log('엔진 설정: '+localStorage.getItem('vb00_engine')+' | 슬롯: '+(localStorage.getItem('st_slot')||'(미선택→f)'));
+      try{
+        const r=await fetch('https://supertoneapi.com/v1/voices/search?language=ko&name='+encodeURIComponent('강일'),{headers:{'x-sup-api-key':getStKey()}});
+        log('① 검색 API: HTTP '+r.status+(r.ok?' ✅':' ❌'));
+        if(r.ok){
+          const d=await r.json();
+          log('   "강일" 검색 결과: '+((d.items||[]).length)+'건'+((d.items||[]).length?' — 첫 결과: '+d.items[0].name+' / models: '+JSON.stringify(d.items[0].models||[]):' ❌ 이름 불일치 가능'));
+        } else { log('   '+String(await r.text()).slice(0,140)); }
+      }catch(e){ log('① 검색 API: ❌ '+e.message+' — CORS 차단이면 여기서 TypeError'); }
+      try{
+        const v=await resolveStVoice(localStorage.getItem('st_slot')||'f');
+        log('② 화자 해석: ✅ '+v.name+' ('+v.id+') model='+v.model);
+        const t0=Date.now();
+        const resp=await fetch('https://supertoneapi.com/v1/text-to-speech/'+v.id+'?output_format=mp3',{
+          method:'POST',headers:{'Content-Type':'application/json','x-sup-api-key':getStKey()},
+          body:JSON.stringify({text:'진단 테스트입니다.',language:'ko',model:v.model,style:v.style||undefined,voice_settings:{speed:1.0}})});
+        log('③ TTS 생성: HTTP '+resp.status+(resp.ok?' ✅ ('+(Date.now()-t0)+'ms)':' ❌'));
+        if(resp.ok){ const b=await resp.blob(); const u=URL.createObjectURL(b);
+          const a=new Audio(u); a.play(); log('   재생 시도 — 소리가 나면 전체 경로 정상'); }
+        else { log('   '+String(await resp.text()).slice(0,140)); }
+      }catch(e){ log('②③: ❌ '+e.message); }
+      log('\n캡처해서 보내주세요.');
+    }, 600);
+  }
+
   // [선발 도구] #stpick — 슬롯별 조건 검색 → 샘플 듣기 → 지정
   if(location.hash==='#stpick'){
     setTimeout(()=>{
