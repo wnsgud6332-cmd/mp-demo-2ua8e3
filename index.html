@@ -1019,6 +1019,16 @@
 
   // Hume Octave TTS 어댑터 — 실패 시 시스템 TTS 자동 폴백(참가자 경험 끊김 방지)
   let humeAudio = null;
+  function showVoiceDebug(msg){ // [진단용 — VB-00 기간 한정]
+    try{
+      let el=document.getElementById('voiceDebug');
+      if(!el){ el=document.createElement('div'); el.id='voiceDebug';
+        el.style.cssText='position:fixed;top:8px;left:8px;z-index:99998;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:3px 7px;border-radius:6px;pointer-events:none;';
+        document.body.appendChild(el); }
+      el.textContent=msg; el.style.display='block';
+      clearTimeout(el.__t); el.__t=setTimeout(()=>{ el.style.display='none'; }, 2500);
+    }catch(e){}
+  }
   async function speakHume(text, mood){
     const key = getHumeKey();
     // Speech Preprocessor 정책 유지: 이모지·웃음표기·괄호는 음성에서 제거(…은 Octave가 문맥 처리)
@@ -1027,16 +1037,17 @@
     s = s.replace(/ {2,}/g,' ').trim();
     if(!s) return;
     const g = localStorage.getItem('vb00_gender'); // m/f/미지정
-    const who = g==='m' ? '낮고 씩씩한 목소리의 개구쟁이 남자아이 강아지' : g==='f' ? '높고 맑고 귀여운 목소리의 여자아이 토끼' : '보들보들 포근한 목소리의 작은 동물 친구';
-    const desc = mood==='emotional'
-      ? who + '가 걱정스럽고 다정하게 위로하듯 한국어로 말한다'
-      : mood==='happy'
-        ? who + '가 신나서 밝고 통통 튀는 목소리로 한국어로 말한다'
-        : who + '가 따뜻하고 자연스럽게 한국어로 말한다';
+    const who = g==='m' ? 'A playful young boy puppy character with a noticeably low, energetic voice'
+              : g==='f' ? 'A sweet young girl bunny character with a noticeably high, clear, cute voice'
+              : 'A soft, warm little animal companion with a gentle cozy voice';
+    const tone = mood==='emotional' ? ', speaking slowly and tenderly with caring concern'
+               : mood==='happy' ? ', speaking brightly with bouncy excitement'
+               : ', speaking warmly and naturally';
+    const desc = who + tone + '. Speaks fluent natural Korean.';
     const resp = await fetch('https://api.hume.ai/v0/tts', {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'X-Hume-Api-Key': key },
-      body: JSON.stringify({ version:'1', utterances:[{ text:s, description:desc, speed: (mood==='emotional' ? 1.15 : 1.4) }] })
+      body: JSON.stringify({ version:'1', utterances:[{ text:s, description:desc, speed: (mood==='emotional' ? 0.95 : 1.05) }] })
     });
     if(!resp.ok) throw new Error('hume http '+resp.status);
     const data = await resp.json();
@@ -1059,8 +1070,10 @@
       const mood = window.__lastMood || 'normal';
       speakHume(text, mood).then(()=>{
         document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_used',d:{engine:'hume'}}}));
-      }).catch(()=>{
-        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_fallback',d:{from:'hume',to:'system'}}}));
+        showVoiceDebug('Hume ✓');
+      }).catch((err)=>{
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_fallback',d:{from:'hume',to:'system',err:String(err&&err.message||err).slice(0,60)}}}));
+        showVoiceDebug('폴백: 기기 목소리 ('+String(err&&err.message||err).slice(0,40)+')');
         speakSystem(text);
       });
       return;
