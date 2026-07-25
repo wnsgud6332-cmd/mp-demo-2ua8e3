@@ -1306,11 +1306,11 @@
     setTimeout(async ()=>{
       const box=document.createElement('div');
       box.style.cssText='position:fixed;inset:14px;z-index:99999;background:#171512;color:#eee;overflow:auto;padding:14px;border-radius:10px;font-size:13px;white-space:pre-wrap;';
-      box.textContent='수퍼톤 진단 시작…\n(닫으려면 화면 탭)';
+      box.textContent='수퍼톤 진단 시작… ['+APP_VER+']\n(닫으려면 화면 탭)';
       box.onclick=()=>{ box.remove(); history.replaceState(null,'',location.pathname); };
       document.body.appendChild(box);
       const log=(s)=>{ box.textContent+='\n'+s; };
-      log('엔진 설정: '+localStorage.getItem('vb00_engine')+' | 슬롯: '+(localStorage.getItem('st_slot')||'(미선택→f)'));
+      log('엔진 설정: '+localStorage.getItem('vb00_engine')+' | 슬롯: '+(localStorage.getItem('st_slot')||'(미선택→f)')+' | 키 끝4: …'+getStKey().slice(-4));
       try{
         const r=await fetch(ST_BASE+'/v1/voices/search?language=ko&name='+encodeURIComponent('강일'),{headers:{'x-sup-api-key':getStKey()}});
         log('① 검색 API: HTTP '+r.status+(r.ok?' ✅':' ❌'));
