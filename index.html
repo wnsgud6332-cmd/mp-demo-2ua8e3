@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v13.8';
+  const APP_VER = 'v13.9';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1352,14 +1352,19 @@
       async function loadSlot(slot,label,q){
         list.innerHTML='검색 중…';
         try{
-          const r=await fetch(ST_BASE+'/v1/voices/search?language=ko&'+q,{headers:{'x-sup-api-key':getStKey()}});
+          let r=await fetch(ST_BASE+'/v1/voices/search?language=ko&'+q,{headers:{'x-sup-api-key':getStKey()}});
           if(!r.ok) throw new Error('http '+r.status);
-          const d=await r.json();
+          let d=await r.json();
+          if(!(d.items||[]).length){ // [v13.9] 조건 0건 → 필터 제거 전체 목록
+            r=await fetch(ST_BASE+'/v1/voices/search?language=ko',{headers:{'x-sup-api-key':getStKey()}});
+            if(r.ok) d=await r.json();
+            if(!(d.items||[]).length){ r=await fetch(ST_BASE+'/v1/voices/search',{headers:{'x-sup-api-key':getStKey()}}); if(r.ok) d=await r.json(); }
+          }
           list.innerHTML='';
-          (d.items||[]).slice(0,25).forEach(v=>{
+          (d.items||[]).slice(0,40).forEach(v=>{
             const row=document.createElement('div');
             row.style.cssText='padding:6px 4px;border-bottom:1px solid #2c2925;display:flex;gap:6px;align-items:center;flex-wrap:wrap;';
-            row.innerHTML='<span style="flex:1">'+v.name+' <small>('+(v.gender||'')+'/'+(v.age||'')+' · '+(v.styles||[]).slice(0,3).join(',')+')</small></span>';
+            row.innerHTML='<span style="flex:1">'+v.name+' <small>('+(v.gender||'')+'/'+(v.age||'')+' · '+(v.styles||[]).slice(0,2).join(',')+' · id:'+String(v.voice_id).slice(0,8)+'…)</small></span>';
             const sample=(v.samples||[]).find(x=>x.language==='ko')||(v.samples||[])[0];
             const b1=document.createElement('button'); b1.textContent='▶ 샘플';
             b1.style.cssText='padding:4px 8px;border-radius:6px;border:1px solid #666;background:#333;color:#fff;';
