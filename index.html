@@ -1124,55 +1124,98 @@
     return 0.25;
   }
 
-  async function speakHume(text, mood){
-    const key = getHumeKey();
-    const s = preprocessKorean(text);
-    if(!s) return;
-    const voiceName = presetVoice();
-    const mappedId = voiceName ? voiceMap()[voiceName] : null;
-    console.log('Selected Voice ID :', mappedId || voiceName || '(none)');
-    // [작업2] 속도: 전역 오버라이드(A/B) > Voice별 매핑 > 0.94
-    const speed = parseFloat(localStorage.getItem('vb00_speed_override') || VOICE_SPEED[voiceName] || '0.94');
-    // [작업1] Description 최소화 — 감정은 Voice가 표현한다
-    const desc = 'Natural conversational Korean.';
-    // [작업3+4] 청크 → utterances 배열 (한 요청, trailing_silence로 호흡)
-    const chunks = chunkKorean(s);
-    const utterances = chunks.map((ch, i)=>{
-      const u = { text: ch, speed: speed, trailing_silence: pauseAfter(ch) };
-      if(i===0){
-        u.description = desc;
-        if(mappedId) u.voice = { id: mappedId };
-        else if(voiceName) u.voice = { name: voiceName, provider:'HUME_AI' };
-      }
-      return u;
-    });
-    console.log('Sending Voice ID :', (utterances[0].voice&&(utterances[0].voice.id||utterances[0].voice.name))||'(none)');
-    const t0 = Date.now();
+  // ===== VB-00.4: Latency — Preload / Cache / First-Chunk-First / 계측 =====
+  const ttsCache = new Map(); // key: voiceId|speed|text → base64 (메모리 캐시, 세션 유지)
+  function ttsKey(vid, speed, text){ return vid+'|'+speed+'|'+text; }
+
+  async function humeRequest(utterances, key){
     const resp = await fetch('https://api.hume.ai/v0/tts', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'X-Hume-Api-Key': key },
+      method:'POST', headers:{ 'Content-Type':'application/json', 'X-Hume-Api-Key': key },
       body: JSON.stringify({ version:'1', utterances: utterances })
     });
     if(!resp.ok) throw new Error('hume http '+resp.status);
     const data = await resp.json();
-    const gens = (data && data.generations) || [];
-    if(!gens.length || !gens[0].audio) throw new Error('hume no audio');
-    const latency = Date.now()-t0;
-    const used = (gens[0].voice&&(gens[0].voice.id||gens[0].voice.name)) || (utterances[0].voice&&(utterances[0].voice.id||utterances[0].voice.name)) || 'DYNAMIC';
-    console.log('Actually Used Voice :', used);
-    showVoiceDebug('Sent: '+((utterances[0].voice&&(utterances[0].voice.id||utterances[0].voice.name))||'(none)').slice(0,20)
-      +'\nUsed: '+String(used).slice(0,20)
-      +'\nSpeed: '+speed+'  Chunks: '+chunks.length+'  Latency: '+latency+'ms  Fallback: NO');
-    // 생성 결과(여러 generation이면 순차) 재생
-    if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
-    const clips = gens.filter(g=>g.audio).map(g=>'data:audio/mp3;base64,'+g.audio);
-    for(const src of clips){
-      await new Promise((resolve)=>{
-        humeAudio = new Audio(src);
-        humeAudio.onended = resolve; humeAudio.onerror = resolve;
-        humeAudio.play().catch(resolve);
-      });
+    return ((data&&data.generations)||[]).filter(g=>g.audio).map(g=>g.audio);
+  }
+
+  function currentVoiceCfg(){
+    const voiceName = presetVoice();
+    const mappedId = voiceName ? voiceMap()[voiceName] : null;
+    const speed = parseFloat(localStorage.getItem('vb00_speed_override') || VOICE_SPEED[voiceName] || '0.94');
+    const vid = mappedId || voiceName || 'dyn';
+    const mkVoice = ()=> mappedId ? { id: mappedId } : (voiceName ? { name: voiceName, provider:'HUME_AI' } : undefined);
+    return { voiceName, mappedId, speed, vid, mkVoice };
+  }
+
+  // [작업1] Preload: 목소리 선택 화면에서 4 프리셋 미리듣기 문장을 백그라운드 생성·캐시
+  const PREVIEW_TEXT = '안녕. 오늘 하루는 어땠어?';
+  async function preloadVoicePreviews(){
+    const genders=[['f'],['m'],[null]]; // hume 3종 (또렷한=기기 TTS라 캐시 불필요)
+    const saveG = localStorage.getItem('vb00_gender');
+    for(const [g] of genders){
+      try{
+        if(g) localStorage.setItem('vb00_gender',g); else localStorage.removeItem('vb00_gender');
+        const cfg = currentVoiceCfg();
+        const k = ttsKey(cfg.vid, cfg.speed, PREVIEW_TEXT);
+        if(ttsCache.has(k)) continue;
+        const u = { text: PREVIEW_TEXT, speed: cfg.speed, description:'Natural conversational Korean.' };
+        const v = cfg.mkVoice(); if(v) u.voice=v;
+        humeRequest([u], getHumeKey()).then(auds=>{ if(auds[0]) ttsCache.set(k, auds[0]); }).catch(()=>{});
+      }catch(e){}
     }
+    if(saveG) localStorage.setItem('vb00_gender',saveG); else localStorage.removeItem('vb00_gender');
+  }
+
+  async function playB64(b64){
+    return new Promise((resolve)=>{
+      humeAudio = new Audio('data:audio/mp3;base64,'+b64);
+      humeAudio.onended = resolve; humeAudio.onerror = resolve;
+      humeAudio.play().catch(resolve);
+    });
+  }
+
+  async function speakHume(text, mood){
+    // [작업6] 계측: Click(=speak 진입) → API Start → First Audio → Playback
+    const tClick = Date.now();
+    const key = getHumeKey();
+    const s = preprocessKorean(text);
+    if(!s) return;
+    const cfg = currentVoiceCfg();
+    console.log('Selected Voice ID :', cfg.vid);
+    const chunks = chunkKorean(s);
+    if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
+
+    // [작업4] 전체 문장 캐시 히트 → 즉시 재생
+    const fullKey = ttsKey(cfg.vid, cfg.speed, s);
+    if(ttsCache.has(fullKey)){
+      const tPlay = Date.now();
+      showVoiceDebug('CACHE HIT\nVoice: '+String(cfg.vid).slice(0,20)+'\nClick→Playback: '+(tPlay-tClick)+'ms');
+      console.log('Latency: Click 0ms → Playback '+(tPlay-tClick)+'ms (cache)');
+      await playB64(ttsCache.get(fullKey));
+      return;
+    }
+
+    // [작업2·3] 첫 문장 우선: 첫 청크만 즉시 요청 → 재생 시작, 나머지는 병렬 생성 후 이어 재생
+    const mkU=(txt,first)=>{ const u={ text:txt, speed:cfg.speed, trailing_silence: pauseAfter(txt) };
+      if(first){ u.description='Natural conversational Korean.'; const v=cfg.mkVoice(); if(v) u.voice=v; } return u; };
+    const tApi = Date.now();
+    console.log('Sending Voice ID :', cfg.vid);
+    const firstP = humeRequest([mkU(chunks[0], true)], key);
+    const restP  = chunks.length>1 ? humeRequest(chunks.slice(1).map((ch,i)=>mkU(ch, i===0)), key) : Promise.resolve([]);
+    const firstAud = (await firstP)[0];
+    if(!firstAud) throw new Error('hume no audio');
+    const tFirst = Date.now();
+    console.log('Actually Used Voice :', cfg.vid);
+    const tPlay = Date.now();
+    showVoiceDebug('Voice: '+String(cfg.vid).slice(0,20)+'  Chunks: '+chunks.length
+      +'\nClick 0ms → API '+(tApi-tClick)+'ms → FirstAudio '+(tFirst-tClick)+'ms → Playback '+(tPlay-tClick)+'ms');
+    console.log('Latency: Click 0 → API '+(tApi-tClick)+' → FirstAudio '+(tFirst-tClick)+' → Playback '+(tPlay-tClick)+' (ms)');
+    const playFirst = playB64(firstAud);
+    let restAuds=[]; try{ restAuds = await restP; }catch(e){}
+    await playFirst;
+    for(const a of restAuds) await playB64(a);
+    // 전체 캐시 저장(단문·미리듣기 재선택 대비 — 첫 청크가 전체인 경우만 정확 캐시)
+    if(chunks.length===1) ttsCache.set(fullKey, firstAud);
   }
 
   // [VB-00.1] 보이스 라이브러리 조회 도구 — #voices 로 열면 목록을 화면+EV 로그에 기록
@@ -1551,6 +1594,7 @@
     $('naming').style.display='none';
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_modal_closed'}}));
     $('voicePick').style.display='flex'; // 다음 단계: 목소리 고르기
+    if(typeof preloadVoicePreviews==='function') preloadVoicePreviews(); // [VB-00.4] 백그라운드 사전 생성
   });
 
   // ---- 목소리 선택 (온보딩 2단계) ----
@@ -1567,6 +1611,9 @@
     b.addEventListener('click', ()=>{
       document.querySelectorAll('.vpBtn').forEach(x=>x.style.borderColor='#e0d6c2');
       b.style.borderColor='var(--blue-deep)';
+      // [작업5] 100ms 내 UI 피드백: 눌림 효과 + 즉시 '듣는 중' 버블
+      b.style.transform='scale(0.97)'; setTimeout(()=>{ b.style.transform=''; },150);
+      if(typeof showBubble==='function') showBubble('…');
       applyVoiceChoice(b.dataset.v); updateVoiceBadge();
       window.__lastMood='happy';
       speak('안녕. 오늘 하루는 어땠어?'); // [VB-00.1] 전 프리셋 동일 문장 — 변수는 Voice 하나
