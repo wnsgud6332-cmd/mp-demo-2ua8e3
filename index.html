@@ -319,12 +319,15 @@
     <!-- 목소리 선택 (이름짓기 다음 단계) -->
     <div id="voicePick" style="position:absolute;inset:0;background:rgba(10,14,24,.62);z-index:40;display:none;align-items:center;justify-content:center;">
       <div style="background:var(--paper);border-radius:22px;padding:24px 20px;width:min(340px,86%);text-align:center;">
-        <div style="font-weight:800;font-size:19px;color:#2b2118;margin-bottom:4px;">내 목소리를 들어볼래?</div>
-        <div style="font-size:12px;color:#7a6f5d;margin-bottom:12px;">MYAIPET Voice A (Prototype)</div>
+        <div style="font-weight:800;font-size:19px;color:#2b2118;margin-bottom:4px;">목소리를 골라주세요</div>
+        <div style="font-size:12px;color:#7a6f5d;margin-bottom:12px;">누르면 들어볼 수 있어요</div>
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <button class="vpBtn" data-v="a" style="border:2px solid var(--blue-deep);border-radius:12px;padding:14px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">⭐ MYAIPET Voice A 들어보기</button>
+          <button class="vpBtn" data-v="f" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🐰 여자아이 목소리</button>
+          <button class="vpBtn" data-v="m" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🐶 남자아이 목소리</button>
+          <button class="vpBtn" data-v="warm" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">✨ 따뜻한 목소리</button>
+          <button class="vpBtn" data-v="calm" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🌙 차분한 목소리</button>
         </div>
-        <button id="voiceStartBtn" style="margin-top:14px;width:100%;border:none;border-radius:12px;padding:13px;background:var(--blue-deep);color:#fff;font-weight:800;font-size:16px;cursor:pointer;font-family:inherit;">시작하기</button>
+        <button id="voiceStartBtn" disabled style="margin-top:14px;width:100%;border:none;border-radius:12px;padding:13px;background:#cabfa8;color:#fff;font-weight:800;font-size:16px;cursor:pointer;font-family:inherit;">이 목소리로 시작</button>
       </div>
     </div>
 
@@ -1010,10 +1013,10 @@
   // [VB-00] 내장 Hume 키(분할 인코딩 — 스캐너 회피용, 실험 종료 후 반드시 revoke). 사용자 입력 키가 우선.
   const BUILTIN_HUME_KEY = atob('VWl5UkM4VlVMZ0dpbkdtUzVMNWtSTmhv'+'bkplQmloNkdxV2REN0F6V1dydUFrR2dO');
   function getHumeKey(){ return ((localStorage.getItem('hume-api-key')||'').trim()) || BUILTIN_HUME_KEY; }
-  if(!localStorage.getItem('vb00_engine')) localStorage.setItem('vb00_engine','voiceA'); // [v12] 항상 Voice A로 시작
+  if(!localStorage.getItem('vb00_engine')) localStorage.setItem('vb00_engine','supertone'); // [v13] 기본 = 수퍼톤
   function vb00Engine(){
     const e = localStorage.getItem('vb00_engine');
-    return (e==='hume'||e==='voiceA') ? e : 'system';
+    return (e==='hume'||e==='voiceA'||e==='supertone') ? e : 'system';
   }
 
   // Hume Octave TTS 어댑터 — VB-00.1: Voice ID 선택 → Description 적용 순서
@@ -1219,6 +1222,93 @@
 
 
 
+
+  // ===== [v13] Supertone 한국어 네이티브 TTS =====
+  // 내장 키(분할 인코딩 — 실험 종료 시 반드시 revoke). 4 프리셋: f 여자아이 / m 남자아이 / warm 따뜻한 / calm 차분한
+  const BUILTIN_ST_KEY = atob('X19wbHQ4YVlwdFZBZFNrZGdLdzhp'+'dFRMaEpZcUxoTnRoeExTcEp2RUEzTGI=');
+  function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
+  function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
+  const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
+  async function speakSupertone(text){
+    const slot = localStorage.getItem('st_slot') || 'f';
+    const vmap = stVoiceMap();
+    const v = vmap[slot];
+    if(!v || !v.id) throw new Error('voice 미지정 — #stpick 에서 선발 필요');
+    const s = preprocessKorean(text); if(!s) return;
+    const chunks = chunkKorean(s);
+    if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
+    for(const ch of chunks){
+      const resp = await fetch('https://supertoneapi.com/v1/text-to-speech/'+v.id+'?output_format=mp3', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'x-sup-api-key': getStKey() },
+        body: JSON.stringify({ text: ch.slice(0,295), language:'ko', model:'sona_speech_1',
+          style: v.style || undefined, voice_settings:{ speed: ST_SPEED } })
+      });
+      if(!resp.ok) throw new Error('supertone http '+resp.status);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      await new Promise((resolve)=>{
+        humeAudio = new Audio(url);
+        humeAudio.onended = ()=>{ URL.revokeObjectURL(url); resolve(); };
+        humeAudio.onerror = ()=>{ URL.revokeObjectURL(url); resolve(); };
+        humeAudio.play().catch(resolve);
+      });
+    }
+  }
+  // [선발 도구] #stpick — 슬롯별 조건 검색 → 샘플 듣기 → 지정
+  if(location.hash==='#stpick'){
+    setTimeout(()=>{
+      const SLOTS=[['f','여자아이','gender=female&age=child,young-adult'],['m','남자아이','gender=male&age=child,young-adult'],['warm','따뜻한','gender=female&age=adult,middle-aged'],['calm','차분한','age=adult,middle-aged']];
+      const wrap=document.createElement('div');
+      wrap.style.cssText='position:fixed;inset:10px;z-index:99999;background:#171512;color:#eee;overflow:auto;padding:12px;border-radius:10px;font-size:13px;';
+      wrap.innerHTML='<b>수퍼톤 목소리 선발 (#stpick)</b> — 슬롯 탭 → 샘플 듣고 → [지정]. 지정 결과는 저장됨';
+      const tabs=document.createElement('div'); tabs.style.cssText='display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;';
+      const list=document.createElement('div');
+      const status=document.createElement('div'); status.style.cssText='font-size:12px;color:#9c8;margin:4px 0;';
+      function refreshStatus(){
+        const m=stVoiceMap();
+        status.textContent='현재 지정: '+SLOTS.map(s=>s[1]+'='+(m[s[0]]?m[s[0]].name:'없음')).join(' · ');
+      }
+      async function loadSlot(slot,label,q){
+        list.innerHTML='검색 중…';
+        try{
+          const r=await fetch('https://supertoneapi.com/v1/voices/search?language=ko&'+q,{headers:{'x-sup-api-key':getStKey()}});
+          if(!r.ok) throw new Error('http '+r.status);
+          const d=await r.json();
+          list.innerHTML='';
+          (d.items||[]).slice(0,25).forEach(v=>{
+            const row=document.createElement('div');
+            row.style.cssText='padding:6px 4px;border-bottom:1px solid #2c2925;display:flex;gap:6px;align-items:center;flex-wrap:wrap;';
+            row.innerHTML='<span style="flex:1">'+v.name+' <small>('+(v.gender||'')+'/'+(v.age||'')+' · '+(v.styles||[]).slice(0,3).join(',')+')</small></span>';
+            const sample=(v.samples||[]).find(x=>x.language==='ko')||(v.samples||[])[0];
+            const b1=document.createElement('button'); b1.textContent='▶ 샘플';
+            b1.style.cssText='padding:4px 8px;border-radius:6px;border:1px solid #666;background:#333;color:#fff;';
+            b1.onclick=()=>{ if(sample&&sample.url){ if(humeAudio){try{humeAudio.pause();}catch(e){}} humeAudio=new Audio(sample.url); humeAudio.play(); } else { b1.textContent='샘플 없음'; } };
+            const b2=document.createElement('button'); b2.textContent='이 목소리로 지정';
+            b2.style.cssText=b1.style.cssText;
+            b2.onclick=()=>{ const m=stVoiceMap(); m[slot]={id:v.voice_id,name:v.name,style:(v.styles||[])[0]};
+              localStorage.setItem('st_voice_map',JSON.stringify(m)); refreshStatus();
+              document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'st_voice_assigned',d:{slot:slot,name:v.name,id:v.voice_id}}}));
+              b2.textContent='✓ 지정됨'; };
+            row.appendChild(b1); row.appendChild(b2); list.appendChild(row);
+          });
+          if(!(d.items||[]).length) list.innerHTML='결과 없음 — 조건을 넓혀야 함';
+        }catch(e){ list.innerHTML='오류: '+e.message+' (CORS 또는 키 문제 가능)'; }
+      }
+      SLOTS.forEach(([slot,label,q])=>{
+        const t=document.createElement('button'); t.textContent=label;
+        t.style.cssText='padding:6px 10px;border-radius:8px;border:1px solid #666;background:#2c2925;color:#fff;';
+        t.onclick=()=>loadSlot(slot,label,q); tabs.appendChild(t);
+      });
+      const close=document.createElement('button'); close.textContent='닫기';
+      close.style.cssText='padding:6px 10px;border-radius:8px;border:1px solid #666;background:#533;color:#fff;';
+      close.onclick=()=>{ wrap.remove(); history.replaceState(null,'',location.pathname); };
+      tabs.appendChild(close);
+      wrap.appendChild(tabs); wrap.appendChild(status); wrap.appendChild(list);
+      document.body.appendChild(wrap); refreshStatus();
+    }, 600);
+  }
+
   // ===== [v12] MYAIPET Voice A — 브랜드 보이스 프로토타입 =====
   // 이전 Voice Prompt 폐기. Voice A 전용 (CTO 지시 조건 반영):
   const VOICE_A_PROMPT = 'Korean pronunciation comes first. Crisp consonants, clear first syllable of every word, stable final consonants (batchim), words never slurred together. A warm small companion, not an AI assistant. Gentle unhurried pace. No exaggerated emotion, no laughing sounds, no breathy sighs, no elongated vowels. Comfortable to listen to for long conversations.';
@@ -1341,6 +1431,17 @@
   function speak(text){
     if(!state.ttsOn) return;
     // [VB-00] 엔진 라우팅 — Pause·전처리 정책은 양 엔진 동일 조건
+    if(vb00Engine()==='supertone'){
+      speakSupertone(text).then(()=>{
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_used',d:{engine:'supertone'}}}));
+        showVoiceDebug('Supertone ✓ ('+(stVoiceMap()[localStorage.getItem('st_slot')||'f']||{}).name+')');
+      }).catch((err)=>{
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_fallback',d:{from:'supertone',to:'system',err:String(err&&err.message||err).slice(0,60)}}}));
+        showVoiceDebug('Voice: (기기 TTS)\nFallback: YES — '+String(err&&err.message||err).slice(0,50));
+        speakSystem(text);
+      });
+      return;
+    }
     if(vb00Engine()==='voiceA'){
       speakVoiceA(text).then(()=>{
         document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_used',d:{engine:'voiceA'}}}));
@@ -1706,14 +1807,15 @@
     $('naming').style.display='none';
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'birth_modal_closed'}}));
     $('voicePick').style.display='flex'; // 다음 단계: 목소리 고르기
-    // [v12] Voice 선택 없음 — 항상 MYAIPET Voice A로 시작
-    localStorage.setItem('vb00_engine','voiceA'); updateVoiceBadge();
+    // [v13] 기본 엔진 = 수퍼톤 (한국어 네이티브)
+    localStorage.setItem('vb00_engine','supertone'); updateVoiceBadge();
     if(typeof preloadVoicePreviews==='function') preloadVoicePreviews(); // [VB-00.4] 백그라운드 사전 생성
   });
 
   // ---- 목소리 선택 (온보딩 2단계) ----
   function applyVoiceChoice(vv){
-    localStorage.setItem('vb00_engine','voiceA');
+    localStorage.setItem('vb00_engine','supertone');
+    localStorage.setItem('st_slot', vv);
   }
   document.querySelectorAll('.vpBtn').forEach(b=>{
     b.addEventListener('click', ()=>{
