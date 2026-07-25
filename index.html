@@ -1228,6 +1228,8 @@
   // 내장 키(분할 인코딩 — 실험 종료 시 반드시 revoke). 4 프리셋: f 여자아이 / m 남자아이 / warm 따뜻한 / calm 차분한
   const BUILTIN_ST_KEY = atob('X19wbHQ4YVlwdFZBZFNrZGdLdzhp'+'dFRMaEpZcUxoTnRoeExTcEp2RUEzTGI=');
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
+  // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
+  const ST_BASE = (localStorage.getItem('st_proxy')||'https://st-proxy.wnsgud6332.workers.dev');
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1238,7 +1240,7 @@
     if(!name) throw new Error('알 수 없는 슬롯 '+slot);
     const cache = stVoiceMap();
     if(cache[slot] && cache[slot].id && cache[slot].pinnedName===name) return cache[slot];
-    const r = await fetch('https://supertoneapi.com/v1/voices/search?language=ko&name='+encodeURIComponent(name), {headers:{'x-sup-api-key':getStKey()}});
+    const r = await fetch(ST_BASE+'/v1/voices/search?language=ko&name='+encodeURIComponent(name), {headers:{'x-sup-api-key':getStKey()}});
     if(!r.ok) throw new Error('voice search http '+r.status);
     const d = await r.json();
     const hit = (d.items||[]).find(v=>v.name===name) || (d.items||[])[0];
@@ -1256,7 +1258,7 @@
     const chunks = chunkKorean(s);
     if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
     for(const ch of chunks){
-      const resp = await fetch('https://supertoneapi.com/v1/text-to-speech/'+v.id+'?output_format=mp3', {
+      const resp = await fetch(ST_BASE+'/v1/text-to-speech/'+v.id+'?output_format=mp3', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'x-sup-api-key': getStKey() },
         body: JSON.stringify({ text: ch.slice(0,295), language:'ko', model: v.model || ST_MODEL,
@@ -1285,7 +1287,7 @@
       const log=(s)=>{ box.textContent+='\n'+s; };
       log('엔진 설정: '+localStorage.getItem('vb00_engine')+' | 슬롯: '+(localStorage.getItem('st_slot')||'(미선택→f)'));
       try{
-        const r=await fetch('https://supertoneapi.com/v1/voices/search?language=ko&name='+encodeURIComponent('강일'),{headers:{'x-sup-api-key':getStKey()}});
+        const r=await fetch(ST_BASE+'/v1/voices/search?language=ko&name='+encodeURIComponent('강일'),{headers:{'x-sup-api-key':getStKey()}});
         log('① 검색 API: HTTP '+r.status+(r.ok?' ✅':' ❌'));
         if(r.ok){
           const d=await r.json();
@@ -1296,7 +1298,7 @@
         const v=await resolveStVoice(localStorage.getItem('st_slot')||'f');
         log('② 화자 해석: ✅ '+v.name+' ('+v.id+') model='+v.model);
         const t0=Date.now();
-        const resp=await fetch('https://supertoneapi.com/v1/text-to-speech/'+v.id+'?output_format=mp3',{
+        const resp=await fetch(ST_BASE+'/v1/text-to-speech/'+v.id+'?output_format=mp3',{
           method:'POST',headers:{'Content-Type':'application/json','x-sup-api-key':getStKey()},
           body:JSON.stringify({text:'진단 테스트입니다.',language:'ko',model:v.model,style:v.style||undefined,voice_settings:{speed:1.0}})});
         log('③ TTS 생성: HTTP '+resp.status+(resp.ok?' ✅ ('+(Date.now()-t0)+'ms)':' ❌'));
@@ -1325,7 +1327,7 @@
       async function loadSlot(slot,label,q){
         list.innerHTML='검색 중…';
         try{
-          const r=await fetch('https://supertoneapi.com/v1/voices/search?language=ko&'+q,{headers:{'x-sup-api-key':getStKey()}});
+          const r=await fetch(ST_BASE+'/v1/voices/search?language=ko&'+q,{headers:{'x-sup-api-key':getStKey()}});
           if(!r.ok) throw new Error('http '+r.status);
           const d=await r.json();
           list.innerHTML='';
