@@ -1226,11 +1226,11 @@
 
   // ===== [v13] Supertone 한국어 네이티브 TTS =====
   // 내장 키(분할 인코딩 — 실험 종료 시 반드시 revoke). 4 프리셋: f 여자아이 / m 남자아이 / warm 따뜻한 / calm 차분한
-  const BUILTIN_ST_KEY = atob('X19wbHQ4YVlwdFZBZFNrZGdLdzhpdF'+'RMaEp5QXFMaE50aHhMU3BKdkVBM0xi');
+  const BUILTIN_ST_KEY = atob('ODhiN2Q0MWQ3Y2ZhYmQ3Zm'+'E1NjIwYTE4ZWViZGFiZWI=');
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v13.7';
+  const APP_VER = 'v13.8';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
