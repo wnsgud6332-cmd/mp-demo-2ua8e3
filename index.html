@@ -1226,11 +1226,11 @@
 
   // ===== [v13] Supertone 한국어 네이티브 TTS =====
   // 내장 키(분할 인코딩 — 실험 종료 시 반드시 revoke). 4 프리셋: f 여자아이 / m 남자아이 / warm 따뜻한 / calm 차분한
-  const BUILTIN_ST_KEY = atob('ODhiN2Q0MWQ3Y2ZhYmQ3Zm'+'E1NjIwYTE4ZWViZGFiZWI=');
+  const BUILTIN_ST_KEY = atob('X19wbHQ4YVlwdFZBZFNrZGdLdzhpdF'+'RMaEp5QXFMaE50aHhMU3BKdkVBM0xi'); // Typecast API key
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v13.9';
+  const APP_VER = 'v14.0';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1241,15 +1241,16 @@
     if(!name) throw new Error('알 수 없는 슬롯 '+slot);
     const cache = stVoiceMap();
     if(cache[slot] && cache[slot].id && cache[slot].pinnedName===name) return cache[slot];
-    const r = await fetch(ST_BASE+'/v1/voices/search?language=ko&name='+encodeURIComponent(name), {headers:{'x-sup-api-key':getStKey()}});
-    if(!r.ok) throw new Error('voice search http '+r.status);
+    // [v14] Typecast: 전체 보이스 목록에서 이름 매칭
+    const r = await fetch(ST_BASE+'/v2/voices?model=ssfm-v30', {headers:{'X-API-KEY':getStKey()}});
+    if(!r.ok){ const b=await r.text(); throw new Error('voices http '+r.status+' '+b.slice(0,60)); }
     const d = await r.json();
-    const hit = (d.items||[]).find(v=>v.name===name) || (d.items||[])[0];
-    if(!hit) throw new Error('화자 검색 결과 없음: '+name);
-    const model = (hit.models||[]).includes(ST_MODEL) ? ST_MODEL : (hit.models||[])[0] || 'sona_speech_1';
-    const entry = { id:hit.voice_id, name:hit.name, pinnedName:name, style:(hit.styles||[])[0], model:model, freshSearch:true };
+    const listArr = Array.isArray(d) ? d : (d.voices||d.items||d.result||[]);
+    const hit = listArr.find(v=>(v.voice_name||v.name)===name) || listArr.find(v=>String(v.voice_name||v.name||'').includes(name));
+    if(!hit) throw new Error('화자 없음: '+name+' (목록 '+listArr.length+'건)');
+    const entry = { id:(hit.voice_id||hit.id), name:(hit.voice_name||hit.name), pinnedName:name, model:'ssfm-v30', freshSearch:true };
     cache[slot]=entry; localStorage.setItem('st_voice_map', JSON.stringify(cache));
-    console.log('[ST] resolved', slot, '→', entry.name, entry.id, 'model:', entry.model);
+    console.log('[TC] resolved', slot, '→', entry.name, entry.id);
     return entry;
   }
   async function speakSupertone(text){
@@ -1263,15 +1264,15 @@
     const chunks = chunkKorean(s);
     if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
     for(const ch of chunks){
-      const resp = await fetch(ST_BASE+'/v1/text-to-speech/'+v.id+'?output_format=mp3', {
+      const resp = await fetch(ST_BASE+'/v1/text-to-speech', {
         method:'POST',
-        headers:{ 'Content-Type':'application/json', 'x-sup-api-key': getStKey() },
-        body: JSON.stringify({ text: ch.slice(0,295), language:'ko', model: v.model || ST_MODEL,
-          style: v.style || undefined, voice_settings:{ speed: ST_SPEED } })
+        headers:{ 'Content-Type':'application/json', 'X-API-KEY': getStKey() },
+        body: JSON.stringify({ voice_id: v.id, text: ch.slice(0,295), model: v.model||'ssfm-v30', language:'kor',
+          output:{ audio_format:'mp3', audio_tempo: ST_SPEED } })
       });
       window.__stLog={slot:slot, name:v.name, id:v.id, model:v.model, search:searchStatus, tts:String(resp.status)};
       console.log('[VoiceLog] Slot:'+slot+' | Voice:'+v.name+' | ID:'+v.id+' | Model:'+v.model+' | Search:'+searchStatus+' | TTS:'+resp.status);
-      if(!resp.ok) throw new Error('supertone http '+resp.status);
+      if(!resp.ok){ const b=await resp.text(); throw new Error('typecast http '+resp.status+' '+b.slice(0,60)); }
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       await new Promise((resolve)=>{
@@ -1281,6 +1282,7 @@
         humeAudio.play().catch(resolve);
       });
     }
+
   }
 
 
@@ -1306,26 +1308,28 @@
     setTimeout(async ()=>{
       const box=document.createElement('div');
       box.style.cssText='position:fixed;inset:14px;z-index:99999;background:#171512;color:#eee;overflow:auto;padding:14px;border-radius:10px;font-size:13px;white-space:pre-wrap;';
-      box.textContent='수퍼톤 진단 시작… ['+APP_VER+']\n(닫으려면 화면 탭)';
+      box.textContent='타입캐스트 진단 시작… ['+APP_VER+']\n(닫으려면 화면 탭)';
       box.onclick=()=>{ box.remove(); history.replaceState(null,'',location.pathname); };
       document.body.appendChild(box);
       const log=(s)=>{ box.textContent+='\n'+s; };
       log('엔진 설정: '+localStorage.getItem('vb00_engine')+' | 슬롯: '+(localStorage.getItem('st_slot')||'(미선택→f)')+' | 키 끝4: …'+getStKey().slice(-4));
       try{
-        const r=await fetch(ST_BASE+'/v1/voices/search?language=ko&name='+encodeURIComponent('강일'),{headers:{'x-sup-api-key':getStKey()}});
+        const r=await fetch(ST_BASE+'/v2/voices?model=ssfm-v30',{headers:{'X-API-KEY':getStKey()}});
         log('① 검색 API: HTTP '+r.status+(r.ok?' ✅':' ❌'));
         if(r.ok){
           const d=await r.json();
-          log('   "강일" 검색 결과: '+((d.items||[]).length)+'건'+((d.items||[]).length?' — 첫 결과: '+d.items[0].name+' / models: '+JSON.stringify(d.items[0].models||[]):' ❌ 이름 불일치 가능'));
+          const arr=Array.isArray(d)?d:(d.voices||d.items||[]);
+          const names=arr.map(v=>v.voice_name||v.name);
+          log('   보이스 '+arr.length+'건. 강일:'+(names.includes('강일')?'✅':'❌')+' 이현:'+(names.includes('이현')?'✅':'❌')+' 몽실이:'+(names.includes('몽실이')?'✅':'❌')+' 억울이:'+(names.includes('억울이')?'✅':'❌'));
         } else { log('   '+String(await r.text()).slice(0,140)); }
       }catch(e){ log('① 검색 API: ❌ '+e.message+' — CORS 차단이면 여기서 TypeError'); }
       try{
         const v=await resolveStVoice(localStorage.getItem('st_slot')||'f');
         log('② 화자 해석: ✅ '+v.name+' ('+v.id+') model='+v.model);
         const t0=Date.now();
-        const resp=await fetch(ST_BASE+'/v1/text-to-speech/'+v.id+'?output_format=mp3',{
-          method:'POST',headers:{'Content-Type':'application/json','x-sup-api-key':getStKey()},
-          body:JSON.stringify({text:'진단 테스트입니다.',language:'ko',model:v.model,style:v.style||undefined,voice_settings:{speed:1.0}})});
+        const resp=await fetch(ST_BASE+'/v1/text-to-speech',{
+          method:'POST',headers:{'Content-Type':'application/json','X-API-KEY':getStKey()},
+          body:JSON.stringify({voice_id:v.id,text:'진단 테스트입니다.',model:'ssfm-v30',language:'kor',output:{audio_format:'mp3'}})});
         log('③ TTS 생성: HTTP '+resp.status+(resp.ok?' ✅ ('+(Date.now()-t0)+'ms)':' ❌'));
         if(resp.ok){ const b=await resp.blob(); const u=URL.createObjectURL(b);
           const a=new Audio(u); a.play(); log('   재생 시도 — 소리가 나면 전체 경로 정상'); }
