@@ -1246,14 +1246,18 @@
     const hit = (d.items||[]).find(v=>v.name===name) || (d.items||[])[0];
     if(!hit) throw new Error('화자 검색 결과 없음: '+name);
     const model = (hit.models||[]).includes(ST_MODEL) ? ST_MODEL : (hit.models||[])[0] || 'sona_speech_1';
-    const entry = { id:hit.voice_id, name:hit.name, pinnedName:name, style:(hit.styles||[])[0], model:model };
+    const entry = { id:hit.voice_id, name:hit.name, pinnedName:name, style:(hit.styles||[])[0], model:model, freshSearch:true };
     cache[slot]=entry; localStorage.setItem('st_voice_map', JSON.stringify(cache));
     console.log('[ST] resolved', slot, '→', entry.name, entry.id, 'model:', entry.model);
     return entry;
   }
   async function speakSupertone(text){
     const slot = localStorage.getItem('st_slot') || 'f';
-    const v = await resolveStVoice(slot); // 이름→ID 자동 해석(캐시)
+    let searchStatus='cache';
+    let v;
+    try{ v = await resolveStVoice(slot); }
+    catch(e){ window.__stLog={slot:slot, name:(ST_PRESETS[slot]||'?'), id:'-', model:'-', search:String(e.message||e).slice(0,30), tts:'-'}; throw e; }
+    if(v && v.freshSearch) searchStatus='200';
     const s = preprocessKorean(text); if(!s) return;
     const chunks = chunkKorean(s);
     if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
@@ -1264,6 +1268,8 @@
         body: JSON.stringify({ text: ch.slice(0,295), language:'ko', model: v.model || ST_MODEL,
           style: v.style || undefined, voice_settings:{ speed: ST_SPEED } })
       });
+      window.__stLog={slot:slot, name:v.name, id:v.id, model:v.model, search:searchStatus, tts:String(resp.status)};
+      console.log('[VoiceLog] Slot:'+slot+' | Voice:'+v.name+' | ID:'+v.id+' | Model:'+v.model+' | Search:'+searchStatus+' | TTS:'+resp.status);
       if(!resp.ok) throw new Error('supertone http '+resp.status);
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
@@ -1488,12 +1494,15 @@
     // [VB-00] 엔진 라우팅 — Pause·전처리 정책은 양 엔진 동일 조건
     if(vb00Engine()==='supertone'){
       speakSupertone(text).then(()=>{
-        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_used',d:{engine:'supertone'}}}));
-        showVoiceDebug('Supertone ✓ ('+(stVoiceMap()[localStorage.getItem('st_slot')||'f']||{}).name+')');
+        const L=window.__stLog||{};
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_used',d:{engine:'supertone',slot:L.slot,voice:L.name,id:L.id}}}));
+        showVoiceDebug('Slot: '+L.slot+' | Voice: '+L.name+'\nID: '+String(L.id).slice(0,22)+'\nModel: '+L.model+' | Search: '+L.search+' | TTS: '+L.tts);
       }).catch((err)=>{
-        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_fallback',d:{from:'supertone',to:'system',err:String(err&&err.message||err).slice(0,60)}}}));
-        showVoiceDebug('Voice: (기기 TTS)\nFallback: YES — '+String(err&&err.message||err).slice(0,50));
-        speakSystem(text);
+        // [P0 지시] Fallback 금지 — 오류를 표시하고 재생하지 않는다 (버그를 숨기지 않는다)
+        const L=window.__stLog||{};
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_error_no_fallback',d:{err:String(err&&err.message||err).slice(0,80),log:L}}}));
+        showVoiceDebug('❌ VOICE ERROR (재생 중단)\nSlot: '+(L.slot||'?')+' | Voice: '+(L.name||'?')+'\nSearch: '+(L.search||'?')+' | TTS: '+(L.tts||'?')+'\n'+String(err&&err.message||err).slice(0,60));
+        if(typeof showBubble==='function') showBubble('⚠️ 목소리 오류 — 진단 필요');
       });
       return;
     }
