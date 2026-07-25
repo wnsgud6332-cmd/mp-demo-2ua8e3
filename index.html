@@ -1219,10 +1219,60 @@
   }
 
 
+
+  // [Voice Sprint v1.0] Candidate #1 — Voice Design (§12: 측정 가능 요구사항 기반)
+  const CANDIDATE_DESIGN = 'A voice for a lifelong companion character. Korean consonants and final consonants (batchim) are delivered crisply and clearly. The first syllable of each word is distinct. Vowels are not elongated. Calm, warm, friendly impression. Speaks clear natural Korean at a measured pace.';
+  async function speakCandidate(text){
+    const key=getHumeKey();
+    const s=preprocessKorean(text); if(!s) return;
+    const auds=await humeRequest([{ text:s, description:CANDIDATE_DESIGN, speed:0.85, trailing_silence:0.3 }], key);
+    if(!auds[0]) throw new Error('no audio');
+    if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
+    await playB64(auds[0]);
+  }
+  // [P0-3] 블라인드 A/B: #blindtest — 평가자는 어느 쪽이 Baseline인지 모른 채 판정
+  if(location.hash==='#blindtest'){
+    setTimeout(()=>{
+      const PICK=['오늘 하루 어땠어?','닭갈비 먹으러 갈까?','괜찮으시면 내일 뵐게요.','오늘은 7월 25일이야.','처음에는 어려워 보여도 하나씩 천천히 하다 보면 어느새 익숙해질 거야.'];
+      let idx=0; const votes=[];
+      const wrap=document.createElement('div');
+      wrap.style.cssText='position:fixed;inset:12px;z-index:99999;background:#171512;color:#eee;overflow:auto;padding:14px;border-radius:10px;font-size:14px;';
+      document.body.appendChild(wrap);
+      function round(){
+        if(idx>=PICK.length){
+          const a=votes.filter(v=>v.winner==='baseline').length, b=votes.filter(v=>v.winner==='candidate').length, t=votes.length-a-b;
+          wrap.innerHTML='<b>블라인드 결과</b><br>Baseline '+a+' : Candidate '+b+' : 비슷 '+t+'<br><br>(EV 로그에 저장됨 — EV 버튼으로 수거)';
+          document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'blind_test_result',d:{baseline:a,candidate:b,tie:t}}}));
+          const cl=document.createElement('button'); cl.textContent='닫기';
+          cl.style.cssText='margin-top:10px;padding:6px 12px;border-radius:8px;border:1px solid #666;background:#333;color:#fff;';
+          cl.onclick=()=>{ wrap.remove(); history.replaceState(null,'',location.pathname); };
+          wrap.appendChild(cl); return;
+        }
+        const sent=PICK[idx];
+        const order = Math.random()<0.5 ? ['baseline','candidate'] : ['candidate','baseline']; // 무작위 — 이름·순서 비공개
+        wrap.innerHTML='<b>블라인드 테스트 '+(idx+1)+'/'+PICK.length+'</b><br><br>문장: '+sent+'<br><br>';
+        const play=(which,label)=>{ const b=document.createElement('button'); b.textContent=label;
+          b.style.cssText='margin:4px;padding:10px 16px;border-radius:10px;border:1px solid #888;background:#2a2723;color:#fff;font-size:14px;';
+          b.onclick=()=>{ window.__lastMood='normal';
+            if(which==='baseline') speakSystem(sent); else speakCandidate(sent).catch(()=>speakSystem(sent));
+          }; return b; };
+        wrap.appendChild(play(order[0],'▶ 소리 1')); wrap.appendChild(play(order[1],'▶ 소리 2'));
+        wrap.appendChild(document.createElement('br'));
+        const vote=(w,label)=>{ const b=document.createElement('button'); b.textContent=label;
+          b.style.cssText='margin:6px 4px;padding:8px 14px;border-radius:10px;border:1px solid #6a6;background:#1f2b1f;color:#cfc;';
+          b.onclick=()=>{ votes.push({sentence:sent, winner:w==='1'?order[0]:w==='2'?order[1]:'tie'});
+            document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'blind_vote',d:votes[votes.length-1]}}));
+            idx++; round(); }; return b; };
+        wrap.appendChild(vote('1','1이 낫다')); wrap.appendChild(vote('2','2가 낫다')); wrap.appendChild(vote('t','비슷하다'));
+      }
+      round();
+    }, 600);
+  }
+
   // [VB-00] Korean Speech Benchmark v1.0 재생 도구 — #benchmark 로 진입
   if(location.hash==='#benchmark'){
     setTimeout(()=>{
-      const SENT=["꼭꼭 씹어 먹어야 해.", "딸기가 참 달았어.", "빨래를 깨끗하게 빨았어.", "쌀쌀한 날씨엔 따뜻하게 입어.", "짜장면이랑 짬뽕 중에 뭐 먹을래?", "꽃이 활짝 피었어.", "토끼가 깡충깡충 뛰었어.", "찌개가 뜨거우니까 천천히 먹어.", "깜짝 놀랐잖아.", "오늘따라 하늘이 참 파랗다.", "닭갈비 먹으러 갈까?", "값이 많이 올랐네.", "여덟 시에 만나자.", "흙냄새가 참 좋다.", "앉았다가 일어나니 어지러워.", "넓은 마당이 있으면 좋겠다.", "몫을 잘 나눠야 해.", "젊은 사람들이 많이 왔어.", "밝은 달이 떴어.", "읊조리듯 말하지 말고 크게 말해줘.", "오늘은 7월 25일이야.", "3시 30분에 약속 있어.", "만 오천 원이면 살 수 있어.", "버스 152번을 타면 돼.", "백 미터만 더 가면 도착이야.", "2026년이 벌써 반이 지났네.", "하루에 물 여덟 잔은 마셔야 해.", "10분만 더 쉬었다 가자.", "전화번호 뒷자리가 4321이야.", "세 개 사면 하나 더 준대.", "오늘 카페에서 아메리카노 마셨어.", "스마트폰 배터리가 다 됐어.", "버스 대신 택시 타고 왔어.", "텔레비전 리모컨 어디 있어?", "마트에서 세일 중이래.", "컴퓨터가 자꾸 느려져.", "에어컨 좀 켜줄래?", "메시지 확인했어?", "엘리베이터가 고장 났대.", "인터넷이 잘 안 돼.", "괜찮았어?", "정말?", "우와, 대단하다.", "보고 싶었어.", "좋은 하루였어.", "고마워.", "힘내.", "잘 잤어?", "맛있는 밥 먹었어?", "오늘 하루 어땠어?", "오늘 아침에 일어나서 창문을 열었더니 시원한 바람이 불어와서 기분이 좋았어.", "어제 네가 말했던 그 식당에 가봤는데, 생각보다 사람이 많아서 삼십 분이나 기다렸어.", "요즘 날씨가 더웠다가 추웠다가 해서 감기 걸리기 쉬우니까 옷을 잘 챙겨 입어야 해.", "주말에 시간 되면 같이 공원에 가서 산책도 하고 맛있는 것도 먹으면 좋겠다.", "네가 지난번에 무릎이 아프다고 했던 게 계속 마음에 걸렸는데, 요즘은 좀 괜찮아졌어?", "마트 일이 바빠서 힘들었을 텐데 그래도 끝까지 해낸 게 정말 대단하다고 생각해.", "저녁에 비가 온다고 하니까 나갈 때 우산 챙기는 거 잊지 말고, 일찍 들어와.", "오랜만에 가족들이 다 모여서 저녁을 같이 먹으니까 옛날 생각도 나고 참 좋았어.", "처음에는 어려워 보여도 하나씩 천천히 하다 보면 어느새 익숙해질 거야.", "매일 조금씩이라도 걷는 습관을 들이면 건강에도 좋고 기분 전환도 된대."];
+      const SENT=["꼭꼭 씹어 먹어야 해.", "딸기가 참 달았어.", "빨래를 깨끗하게 빨았어.", "쌀쌀한 날씨엔 따뜻하게 입어.", "짜장면이랑 짬뽕 중에 뭐 먹을래?", "꽃이 활짝 피었어.", "토끼가 깡충깡충 뛰었어.", "찌개가 뜨거우니까 천천히 먹어.", "깜짝 놀랐잖아.", "오늘따라 하늘이 참 파랗다.", "닭갈비 먹으러 갈까?", "값이 많이 올랐네.", "여덟 시에 만나자.", "흙냄새가 참 좋다.", "앉았다가 일어나니 어지러워.", "넓은 마당이 있으면 좋겠다.", "몫을 잘 나눠야 해.", "젊은 사람들이 많이 왔어.", "밝은 달이 떴어.", "읊조리듯 말하지 말고 크게 말해줘.", "오늘은 7월 25일이야.", "3시 30분에 약속 있어.", "만 오천 원이면 살 수 있어.", "버스 152번을 타면 돼.", "백 미터만 더 가면 도착이야.", "2026년이 벌써 반이 지났네.", "하루에 물 여덟 잔은 마셔야 해.", "10분만 더 쉬었다 가자.", "전화번호 뒷자리가 4321이야.", "세 개 사면 하나 더 준대.", "오늘 카페에서 아메리카노 마셨어.", "스마트폰 배터리가 다 됐어.", "버스 대신 택시 타고 왔어.", "텔레비전 리모컨 어디 있어?", "마트에서 세일 중이래.", "컴퓨터가 자꾸 느려져.", "에어컨 좀 켜줄래?", "메시지 확인했어?", "엘리베이터가 고장 났대.", "인터넷이 잘 안 돼.", "괜찮았어?", "정말?", "우와, 대단하다.", "보고 싶었어.", "좋은 하루였어.", "고마워.", "힘내.", "잘 잤어?", "맛있는 밥 먹었어?", "오늘 하루 어땠어?", "오늘 아침에 일어나서 창문을 열었더니 시원한 바람이 불어와서 기분이 좋았어.", "어제 네가 말했던 그 식당에 가봤는데, 생각보다 사람이 많아서 삼십 분이나 기다렸어.", "요즘 날씨가 더웠다가 추웠다가 해서 감기 걸리기 쉬우니까 옷을 잘 챙겨 입어야 해.", "주말에 시간 되면 같이 공원에 가서 산책도 하고 맛있는 것도 먹으면 좋겠다.", "네가 지난번에 무릎이 아프다고 했던 게 계속 마음에 걸렸는데, 요즘은 좀 괜찮아졌어?", "마트 일이 바빠서 힘들었을 텐데 그래도 끝까지 해낸 게 정말 대단하다고 생각해.", "저녁에 비가 온다고 하니까 나갈 때 우산 챙기는 거 잊지 말고, 일찍 들어와.", "오랜만에 가족들이 다 모여서 저녁을 같이 먹으니까 옛날 생각도 나고 참 좋았어.", "처음에는 어려워 보여도 하나씩 천천히 하다 보면 어느새 익숙해질 거야.", "매일 조금씩이라도 걷는 습관을 들이면 건강에도 좋고 기분 전환도 된대.", "꽃이 활짝 피어 있어요.", "밥을 먹었어요.", "옷을 입어 보세요.", "책을 읽어 주세요.", "문을 열어 두었어요.", "길을 걸어 다녔어요.", "눈이 많이 내렸어요.", "손을 잡아 주었어요.", "돈을 넣어 두세요.", "맛있는 음식을 먹으러 가요.", "오늘 하루 어떠셨어요?", "진지 드셨어요?", "편히 쉬세요.", "좋은 하루 되세요.", "무리하지 마시고 천천히 하세요.", "건강 잘 챙기셔야 해요.", "말씀해 주셔서 감사합니다.", "괜찮으시면 내일 뵐게요.", "조심히 들어가세요.", "보고 싶었어요, 어서 오세요."];
       const wrap=document.createElement('div');
       wrap.style.cssText='position:fixed;inset:12px;z-index:99999;background:#171512;color:#eee;overflow:auto;padding:12px;border-radius:10px;font-size:13px;';
       let blind=false;
@@ -1301,7 +1351,8 @@
       stopWatchdog(); utterKeep.length = 0;
       const chain = ++speakChain;
       const mood = window.__lastMood || 'normal';
-      // [VB-00.5] 감정 강도 25% 축소 + 명료도 우선(과한 고음 제거 — 발음 뭉갬·피로 원인)
+      // ⛔ [FROZEN BASELINE — Voice Sprint v1.0] 아래 파라미터는 동결. 수정 금지.
+      // 모든 비교는 Frozen Baseline VS Candidate 구조로만. (Candidate는 #blindtest 참조)
       const baseRate  = mood==='emotional' ? 0.93 : mood==='happy' ? 1.03 : 0.97; // ±0.02 미세 조정 범위
       const basePitch = 1.12; // 1.28 → 1.12: '작은 존재' 느낌은 유지하되 발음 왜곡 제거
 
