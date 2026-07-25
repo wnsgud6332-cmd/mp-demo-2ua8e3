@@ -983,13 +983,73 @@
     try{ window.speechSynthesis.onvoiceschanged = pickPetVoice; }catch(e){}
   }
 
+  // ===== VB-00 (Voice Baseline Validation) =====
+  // 조건: #voice-hume(Hume Octave) / #voice-sys(기존 speechSynthesis). 기본 sys.
+  // Pause·Prompt·Memory·Behavior 전부 동결 — Voice Layer만 교체(교체 가능 Output 원칙).
+  (function(){
+    if(location.hash==='#voice-hume'){
+      localStorage.setItem('vb00_engine','hume');
+      if(!localStorage.getItem('hume-api-key')){
+        const k = prompt('[인터뷰어] Hume API 키를 입력하세요 (platform.hume.ai에서 발급):');
+        if(k) localStorage.setItem('hume-api-key', k.trim());
+      }
+    } else if(location.hash==='#voice-sys'){ localStorage.setItem('vb00_engine','system'); }
+    if(!localStorage.getItem('vb00_engine')) localStorage.setItem('vb00_engine','system');
+  })();
+  function vb00Engine(){
+    return (localStorage.getItem('vb00_engine')==='hume' && localStorage.getItem('hume-api-key')) ? 'hume' : 'system';
+  }
+
+  // Hume Octave TTS 어댑터 — 실패 시 시스템 TTS 자동 폴백(참가자 경험 끊김 방지)
+  let humeAudio = null;
+  async function speakHume(text, mood){
+    const key = localStorage.getItem('hume-api-key');
+    // Speech Preprocessor 정책 유지: 이모지·웃음표기·괄호는 음성에서 제거(…은 Octave가 문맥 처리)
+    let s = String(text||'').replace(/\([^)]*\)/g,' ').replace(/[ㅎㅋ]{2,}/g,' ').replace(/\^\^+/g,' ');
+    try{ s = s.replace(new RegExp('[\\p{Extended_Pictographic}\\u{FE0F}\\u{200D}]','gu'),' '); }catch(e){}
+    s = s.replace(/ {2,}/g,' ').trim();
+    if(!s) return;
+    const desc = mood==='emotional'
+      ? '작고 귀여운 동물 친구가 걱정스럽고 다정하게, 천천히 낮은 목소리로 위로하듯 한국어로 말한다'
+      : mood==='happy'
+        ? '작고 귀여운 동물 친구가 신나서 밝고 통통 튀는 목소리로 한국어로 말한다'
+        : '작고 귀여운 동물 친구가 따뜻하고 자연스럽게 한국어로 말한다';
+    const resp = await fetch('https://api.hume.ai/v0/tts', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'X-Hume-Api-Key': key },
+      body: JSON.stringify({ version:'2', utterances:[{ text:s, description:desc }] })
+    });
+    if(!resp.ok) throw new Error('hume http '+resp.status);
+    const data = await resp.json();
+    const b64 = data && data.generations && data.generations[0] && data.generations[0].audio;
+    if(!b64) throw new Error('hume no audio');
+    if(humeAudio){ try{ humeAudio.pause(); }catch(e){} }
+    humeAudio = new Audio('data:audio/mp3;base64,'+b64);
+    await humeAudio.play();
+  }
+
   let speakChain = 0;              // 최신 발화만 재생(이전 체인 무효화)
   const utterKeep = [];            // [끊김 방지] 재생 중 utterance 참조 유지 — Chrome GC 버그 대응
   let resumeWatchdog = null;       // [끊김 방지] Chrome(안드) 장문 멈춤 버그 — 주기적 resume
   function stopWatchdog(){ if(resumeWatchdog){ clearInterval(resumeWatchdog); resumeWatchdog=null; } }
 
   function speak(text){
-    if(!state.ttsOn || !('speechSynthesis' in window)) return;
+    if(!state.ttsOn) return;
+    // [VB-00] 엔진 라우팅 — Pause·전처리 정책은 양 엔진 동일 조건
+    if(vb00Engine()==='hume'){
+      const mood = window.__lastMood || 'normal';
+      speakHume(text, mood).then(()=>{
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_used',d:{engine:'hume'}}}));
+      }).catch(()=>{
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_fallback',d:{from:'hume',to:'system'}}}));
+        speakSystem(text);
+      });
+      return;
+    }
+    speakSystem(text);
+  }
+  function speakSystem(text){
+    if(!('speechSynthesis' in window)) return;
     try{
       window.speechSynthesis.cancel();
       stopWatchdog(); utterKeep.length = 0;
@@ -1475,6 +1535,8 @@
         memoryReferences:count('memory_reference'),
         practiceModeEntered:count('practice_mode_entered'),
         mb01Condition: localStorage.getItem('mb01_condition')||'B',
+        vb00Engine: localStorage.getItem('vb00_engine')||'system',
+        humeUsed: count('voice_engine_used'), humeFallback: count('voice_engine_fallback'),
         currentRelationshipStage:relStage };
       const payload={summary, events:arr};
       const a=document.createElement('a');
