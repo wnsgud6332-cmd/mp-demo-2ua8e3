@@ -983,41 +983,64 @@
     try{ window.speechSynthesis.onvoiceschanged = pickPetVoice; }catch(e){}
   }
 
-  let speakChain = 0; // 최신 발화만 재생(이전 체인 무효화)
+  let speakChain = 0;              // 최신 발화만 재생(이전 체인 무효화)
+  const utterKeep = [];            // [끊김 방지] 재생 중 utterance 참조 유지 — Chrome GC 버그 대응
+  let resumeWatchdog = null;       // [끊김 방지] Chrome(안드) 장문 멈춤 버그 — 주기적 resume
+  function stopWatchdog(){ if(resumeWatchdog){ clearInterval(resumeWatchdog); resumeWatchdog=null; } }
+
   function speak(text){
     if(!state.ttsOn || !('speechSynthesis' in window)) return;
     try{
       window.speechSynthesis.cancel();
+      stopWatchdog(); utterKeep.length = 0;
       const chain = ++speakChain;
       const mood = window.__lastMood || 'normal';
-      // 어린 동물 같은 음색: 높은 pitch 기반 + 감정별 속도
       const baseRate  = mood==='emotional' ? 0.88 : mood==='happy' ? 1.08 : 0.98;
-      const basePitch = 1.28; // 성체 아나운서가 아니라 작은 존재의 목소리
-      const segs = toSpeechSegments(text);
-      let delay = mood==='emotional' ? 500 : 120; // 첫 호흡
-      for(const seg of segs){
-        if(seg.t==='pause'){ delay += seg.ms; continue; }
-        // 문장 단위 분리(억양 다양화). lookbehind 미지원 기기 폴백 포함
+      const basePitch = 1.28;
+
+      // 세그먼트 → 재생 큐(문장/침묵 평탄화)
+      const queue = [];
+      for(const seg of toSpeechSegments(text)){
+        if(seg.t==='pause'){ queue.push({t:'pause', ms:seg.ms}); continue; }
         let sentences;
         try{ sentences = seg.v.split(new RegExp('(?<=[.!?])\\s+')).filter(x=>x.trim()); }
         catch(e){ sentences = seg.v.split(/[.!?]\s+/).filter(x=>x.trim()); }
-        for(const sent of sentences){
-          setTimeout(()=>{
-            if(chain!==speakChain) return; // 새 발화가 시작되면 이전 체인 중단
-            try{
-              const u = new SpeechSynthesisUtterance(sent.trim());
-              u.lang='ko-KR';
-              if(petVoice) u.voice = petVoice;
-              u.rate  = baseRate  + (Math.random()*0.08-0.04); // 문장마다 다른 호흡
-              u.pitch = basePitch + (Math.random()*0.12-0.06); // 동일 억양 금지
-              // 문장 끝 자연스러운 낙하: 짧은 문장(감탄)은 살짝 올리고, 긴 문장은 기본
-              if(sent.trim().length<=4) u.pitch += 0.08;
-              window.speechSynthesis.speak(u);
-            }catch(e){}
-          }, delay);
-          delay += 280 + sent.length*55 + (mood==='emotional'?220:60); // 문장 간 숨
-        }
+        for(const s of sentences) queue.push({t:'speak', v:s.trim()});
       }
+      if(!queue.length) return;
+
+      // [끊김 방지] Chrome 안드로이드: 재생 중 조용히 멈추는 버그 → 3초마다 resume
+      resumeWatchdog = setInterval(()=>{
+        try{ if(window.speechSynthesis.speaking && !window.speechSynthesis.paused) window.speechSynthesis.resume(); }catch(e){}
+      }, 3000);
+
+      let idx = 0;
+      const firstBreath = mood==='emotional' ? 500 : 120;
+      function playNext(){
+        if(chain!==speakChain){ stopWatchdog(); return; }
+        if(idx>=queue.length){ stopWatchdog(); return; }
+        const item = queue[idx++];
+        if(item.t==='pause'){ setTimeout(playNext, item.ms); return; }
+        try{
+          const u = new SpeechSynthesisUtterance(item.v);
+          u.lang='ko-KR';
+          if(petVoice) u.voice = petVoice;
+          u.rate  = baseRate  + (Math.random()*0.08-0.04);
+          u.pitch = basePitch + (Math.random()*0.12-0.06);
+          if(item.v.length<=4) u.pitch += 0.08;
+          utterKeep.push(u); // GC 방지 참조
+          const breath = 220 + (mood==='emotional'?200:60); // 문장 간 숨
+          let advanced = false;
+          const advance = ()=>{ if(advanced) return; advanced=true;
+            const i=utterKeep.indexOf(u); if(i>=0) utterKeep.splice(i,1);
+            setTimeout(playNext, breath); };
+          u.onend = advance;
+          u.onerror = advance;                       // 에러여도 다음 문장으로
+          setTimeout(advance, 1500 + item.v.length*350); // 안전망: 이벤트 유실 대비
+          window.speechSynthesis.speak(u);
+        }catch(e){ playNext(); }
+      }
+      setTimeout(playNext, firstBreath);
     }catch(e){}
   }
 
