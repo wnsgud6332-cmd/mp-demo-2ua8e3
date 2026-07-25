@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v14.2';
+  const APP_VER = 'v14.3';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1302,6 +1302,39 @@
       document.body.appendChild(w);
     });
   })();
+
+
+  // [Voice Selection Sprint V1 — STEP 1] #vexport : 591개 전체 JSON Export
+  if(location.hash==='#vexport'){
+    setTimeout(async ()=>{
+      const box=document.createElement('div');
+      box.style.cssText='position:fixed;inset:14px;z-index:999999;background:#171512;color:#eee;overflow:auto;padding:14px;border-radius:10px;font-size:13px;white-space:pre-wrap;';
+      box.textContent='Voice 전체 Export 시작… ['+APP_VER+']';
+      document.body.appendChild(box);
+      try{
+        const r=await fetch(ST_BASE+'/v2/voices',{headers:{'X-API-KEY':getStKey()}});
+        if(!r.ok) throw new Error('voices http '+r.status);
+        const d=await r.json();
+        const arr=Array.isArray(d)?d:(d.voices||d.items||d.result||[]);
+        box.textContent+='\n총 '+arr.length+'건 수신. 원본 필드 전체 보존 저장.';
+        // 필드 구조 샘플 표시 (분류 설계용)
+        if(arr[0]) box.textContent+='\n\n[필드 구조 샘플]\n'+JSON.stringify(arr[0],null,1).slice(0,600);
+        const blob=new Blob([JSON.stringify(arr,null,1)],{type:'application/json'});
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob);
+        a.download='typecast_voices_all.json';
+        a.textContent='\n📥 typecast_voices_all.json 다운로드';
+        a.style.cssText='display:block;margin-top:14px;padding:12px;background:#4a7dff;color:#fff;border-radius:10px;text-align:center;font-weight:800;text-decoration:none;';
+        box.appendChild(a);
+        const tip=document.createElement('div');
+        tip.textContent='다운로드한 파일을 Claude 채팅에 업로드해 주세요. (닫기: 화면 상단 탭)';
+        tip.style.cssText='margin-top:8px;color:#9c8;';
+        box.appendChild(tip);
+        box.onclick=(e)=>{ if(e.target===box){ box.remove(); history.replaceState(null,'',location.pathname);} };
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'vexport_done',d:{count:arr.length}}}));
+      }catch(e){ box.textContent+='\n❌ '+e.message; }
+    }, 600);
+  }
 
   // [v13.2] #stdiag — 수퍼톤 3단 자가진단 (키 / 이름검색 / TTS생성)
   if(location.hash==='#stdiag'){
