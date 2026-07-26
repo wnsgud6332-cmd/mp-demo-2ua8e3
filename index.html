@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v15.0';
+  const APP_VER = 'v15.1';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -2043,6 +2043,54 @@
     state.lastVisit = new Date().toISOString();
     saveState();
   })();
+
+  /* === Presence Engine pe1 — INT-001R 2단계 Wiring (EVT-002 Behavior 계층만, 랜덤 금지) === */
+  const PE = { lastUserAct: Date.now(), lastExpress: 0, justReturned: false, seq: 0 };
+  const PE_REL_ORD = {forming:0, budding:1, steady:2, deep:3, lifelong:4};
+  function peBondState(){ return ['forming','budding','steady','deep','lifelong'][Math.min(relStageIndex(),4)]; }
+  function peRecentFact(f){ return f[f.length-1].t.replace(/\.$/,''); }
+  function pePresence(){
+    if(Date.now() - PE.lastUserAct < 30000) return 'accompanying';
+    if(PE.justReturned) return 'greeting';
+    if((state.facts||[]).length > 0 && new Date().getHours() >= 21) return 'observing';
+    return 'resting';
+  }
+  const PE_CATALOG = {
+    organize_day: {p:'observing', rel:'forming', need:f=>f.length>0,
+      line:f=>'(오늘 우리 이야기를 조용히 정리하는 중이야)', meaning:'우리의 하루를 정리한다'},
+    window_gaze:  {p:'resting', rel:'steady', need:f=>f.some(x=>/(산책|나들이|여행|공원|바깥|외출|등산)/.test(x.t)),
+      line:f=>'(창밖을 물끄러미 바라본다)', meaning:'같이 나갔던 날을 떠올린다'},
+    core_pulse:   {p:'resting', rel:'budding', need:f=>f.length>=3,
+      line:f=>'…'+peRecentFact(f)+' — 방금 그 생각 하고 있었어.', meaning:'함께한 시간이 살아 있다'},
+    light_breathe:{p:'resting', rel:'forming', need:f=>true, line:f=>null, meaning:'살아 있다'}
+  };
+  const PE_ORDER = ['organize_day','window_gaze','core_pulse','light_breathe'];
+  function peSelect(){
+    const p = pePresence();
+    if(p === 'accompanying' || p === 'greeting') return null;
+    const facts = state.facts || [];
+    for(const id of PE_ORDER){
+      const b = PE_CATALOG[id];
+      if(b.p !== p) continue;
+      if(!b.need(facts)) continue;
+      if(PE_REL_ORD[peBondState()] < PE_REL_ORD[b.rel]) continue;
+      return id;
+    }
+    return (p === 'resting') ? 'light_breathe' : null;
+  }
+  function peTick(){
+    const id = peSelect();
+    if(!id) return;
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'behavior_shown',
+      d:{b:id, presence:pePresence(), bond:peBondState(), seq:++PE.seq}}}));
+    const line = PE_CATALOG[id].line(state.facts || []);
+    if(line && Date.now() - PE.lastExpress > 180000){ showBubble(line); PE.lastExpress = Date.now(); }
+  }
+  ['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev, ()=>{ PE.lastUserAct = Date.now(); }, {passive:true}));
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden){ PE.justReturned = true; setTimeout(()=>{ PE.justReturned = false; }, 8000); PE.lastUserAct = Date.now(); }
+  });
+  setInterval(peTick, 45000);
 })();
 </script>
 
