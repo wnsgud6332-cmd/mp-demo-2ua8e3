@@ -1230,28 +1230,17 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v14.4';
+  const APP_VER = 'v15.0';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
-  const ST_PRESETS = { m:'강일', f:'이현', dog:'몽실이', cat:'억울이' };
+  const ST_PRESETS = { m:'Kangil', f:'Sua', dog:'Dylan', cat:'Kelsey' }; // [Sprint V1 확정 캐스트]
+  const ST_IDS = {"f": "tc_6699eb5749dfac016c29445c", "m": "tc_68d4b115f0486108a7eefb37", "dog": "tc_672c5f5ce59fac2a48faeaee", "cat": "tc_6763aa69e0158fa7fe2ecdd2"}; // voice_id 직결 — 검색 단계 제거
   const ST_MODEL = 'ssfm-30';
   async function resolveStVoice(slot){
-    const name = ST_PRESETS[slot];
-    if(!name) throw new Error('알 수 없는 슬롯 '+slot);
-    const cache = stVoiceMap();
-    if(cache[slot] && cache[slot].id && cache[slot].pinnedName===name) return cache[slot];
-    // [v14] Typecast: 전체 보이스 목록에서 이름 매칭
-    const r = await fetch(ST_BASE+'/v2/voices?model=ssfm-v30', {headers:{'X-API-KEY':getStKey()}});
-    if(!r.ok){ const b=await r.text(); throw new Error('voices http '+r.status+' '+b.slice(0,60)); }
-    const d = await r.json();
-    const listArr = Array.isArray(d) ? d : (d.voices||d.items||d.result||[]);
-    const hit = listArr.find(v=>(v.voice_name||v.name)===name) || listArr.find(v=>String(v.voice_name||v.name||'').includes(name));
-    if(!hit) throw new Error('화자 없음: '+name+' (목록 '+listArr.length+'건)');
-    const entry = { id:(hit.voice_id||hit.id), name:(hit.voice_name||hit.name), pinnedName:name, model:'ssfm-v30', freshSearch:true };
-    cache[slot]=entry; localStorage.setItem('st_voice_map', JSON.stringify(cache));
-    console.log('[TC] resolved', slot, '→', entry.name, entry.id);
-    return entry;
+    const name=ST_PRESETS[slot], id=ST_IDS[slot];
+    if(!id) throw new Error('알 수 없는 슬롯 '+slot);
+    return { id:id, name:name, pinnedName:name, model:'ssfm-v30', freshSearch:false };
   }
   async function speakSupertone(text){
     const slot = localStorage.getItem('st_slot') || 'f';
