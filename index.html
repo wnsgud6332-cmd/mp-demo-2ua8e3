@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v16.4';
+  const APP_VER = 'v16.5';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1841,7 +1841,7 @@
     for(const x of sents){ const k=x.trim(); if(!k) continue; if(seen.has(k)) continue; seen.add(k); out.push(x); }
     return out.join(' ').trim();
   }
-  async function callClaude(userText){
+  async function callClaude(userText, allowTools){
     const apiKey = getApiKey();
     if(!apiKey) throw new Error('no-api-key');
     const grouped = CATS.map(c=>{
@@ -1911,9 +1911,9 @@
         },
         body: JSON.stringify({
           model:'claude-sonnet-4-6',
-          max_tokens:700,
+          max_tokens: allowTools ? 700 : 400, // [v16.5] Fast 경로는 생성 예산도 가볍게 — 짧은 답에 700은 낭비
           system: system,
-          tools:[{type:'web_search_20250305', name:'web_search', max_uses:2}],
+          ...(allowTools ? {tools:[{type:'web_search_20250305', name:'web_search', max_uses:2}]} : {}), // [v16.5] Fast Path는 도구 자체를 싣지 않는다 — 구조적으로 Search 0회
           messages: msgs
         })
       });
@@ -2010,6 +2010,27 @@
     return div;
   }
   // ---------------- send flow ----------------
+  // [v16.5] Tier0 사전 — 보수적 게이트: 짧고(≤12자), 물음표 없고, 목록과 정확 일치할 때만
+  const INSTANT_SETS = [
+    { re: /^(응|웅|넵|네|그래|오케이|알겠어|좋아)[!~. ]*$/, pool: ['응!','그래~','좋아 😊','응응'] },
+    { re: /^(고마워|고맙다|감사해|감사|땡큐|응 고마워|고마워요)[!~. ]*$/, pool: ['뭘~ 이 정도로 😊','내가 더 고맙지','언제든!','도움이 됐다니 다행이야'] },
+    { re: /^(안녕|하이|안뇽|왔어|나 왔어|왔다)[!~. ]*$/, pool: ['어서 와!','왔구나, 반가워 😊','응, 나 여기 있어'] },
+    { re: /^(잘자|굿나잇|자러 갈게|잘게|잘 자)[!~. ]*$/, pool: ['잘 자~ 좋은 꿈 꿔','내일 봐! 푹 쉬어','응, 잘 자 😊'] }
+  ];
+  function instantReply(t){
+    const s = String(t||'').trim();
+    if(!s || s.length > 12 || s.indexOf('?') >= 0) return null;
+    for(const set of INSTANT_SETS){
+      if(set.re.test(s)) return set.pool[(state.history.length + (state.facts||[]).length) % set.pool.length]; // 결정적 회전 — 랜덤 금지
+    }
+    return null;
+  }
+  function infoLikely(t){ // Heavy 사전 판별 — 도구 부착 여부 결정 (놓치면 승격 안전망이 받는다)
+    const s = String(t||'');
+    if(/(날씨|기온|미세먼지|뉴스|환율|주가|코스피|금값|유가|몇\s?도|얼마야|얼마예요|어디야|언제야|검색|찾아줘|알려줘|추천해)/.test(s)) return true;
+    if(/\?$/.test(s) && /(오늘|내일|지금|요즘|이번 주)/.test(s)) return true;
+    return false;
+  }
   let sending = false;
   async function sendMessage(){
     const input = $('textInput');
@@ -2025,15 +2046,37 @@
     }
     input.value='';
     addMsg(text, 'user');
+    // [v16.5 PRS-001B] Tier0 Instant Path — 검색도 기억탐색도 필요 없는 말은 기다리게 하지 않는다
+    const __t0i = Date.now();
+    const __inst = instantReply(text);
+    if(__inst){
+      state.history.push({role:'user',content:text},{role:'assistant',content:JSON.stringify({reply:__inst})});
+      addMsg(__inst, 'pet'); showBubble(__inst); speak(__inst);
+      gainRelationship(0.5, 0.1);
+      document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'task_profile',d:{
+        input:text.slice(0,30), decision:'instant', path:'instant', actual:'light', match:true,
+        reason:'즉답 사전 경로 — LLM 미경유', latencyMs: Date.now()-__t0i }}}));
+      saveState();
+      if(window.__mpQueue && window.__mpQueue.length){ const nx=window.__mpQueue.shift(); setTimeout(()=>{ $('textInput').value=nx; sendMessage(); },200); }
+      return;
+    }
     sending = true;
     window.__turnT0 = Date.now(); // [v16.4 M10] 지연 측정
 
     let parsed;
     try{
       if(state.practiceMode) throw new Error('practice');
-      parsed = await callClaude(text);
+      const __allowTools = infoLikely(text);
+      const __tLLM0 = Date.now();
+      parsed = await callClaude(text, __allowTools);
+      if(parsed && !parsed.__parseFailed && !__allowTools && (parsed.decision==='knowledge'||parsed.decision==='search') && !(parsed.__searchUses>0)){
+        // [v16.5] 승격 안전망 — 사전 판별이 놓친 정보 질문은 도구를 싣고 한 번 더
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'task_profile',d:{input:text.slice(0,30), decision:'escalate', path:'heavy', actual:'escalating', match:true, reason:'knowledge 판단 — 도구 재호출', latencyMs:Date.now()-__tLLM0}}}));
+        try{ parsed = await callClaude(text, true); }catch(e){}
+      }
+      window.__tLLMms = Date.now()-__tLLM0;
       if(parsed && parsed.__parseFailed){ // Stage 3: 조용한 재시도 1회 — 사용자는 미르만 본다
-        try{ parsed = await callClaude(text); }catch(e){ parsed = {__parseFailed:true}; }
+        try{ parsed = await callClaude(text, __allowTools); }catch(e){ parsed = {__parseFailed:true}; }
       }
       if(parsed && parsed.__parseFailed){ // Stage 4는 없다 — 회복 문장으로 종결. 원문 노출 절대 금지
         parsed = {reply:'잠깐, 확인하는 과정에서 문제가 있었어. 내 쪽 문제야 — 다시 확인해볼게.', remember:[], topic: state.topicHistory.slice(-1)[0]||'일상'};
@@ -2069,7 +2112,7 @@
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'task_profile',d:{
       input:(text||'').slice(0,30), decision:parsed.decision||'?', path:__path,
       actual: __actualHeavy?'heavy':'light', match: ((__path==='heavy')===__actualHeavy),
-      reason:(parsed.search_reason||'').slice(0,50), latencyMs: Date.now()-(window.__turnT0||Date.now())
+      reason:(parsed.search_reason||'').slice(0,50), latencyMs: Date.now()-(window.__turnT0||Date.now()), llmMs: window.__tLLMms||0
     }}})); // [M10 Profiler + M11 Accuracy 원자료]
     parsed.reply = sanitizeDisplay(parsed.reply); // [v16.1] 최종 관문 — 파서를 뚫고 온 잔재도 여기서 소멸
     addMsg(parsed.reply, 'pet');
