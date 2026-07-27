@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v15.6';
+  const APP_VER = 'v15.7';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -2134,11 +2134,12 @@
     const line = PE_CATALOG[id].line(state.facts || []);
     if(line && Date.now() - PE.lastExpress > 180000){ showBubble(line); PE.lastExpress = Date.now(); }
   }
-  ['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev, ()=>{ PE.lastUserAct = Date.now(); }, {passive:true}));
+  ['pointerdown','keydown','scroll','touchmove','wheel'].forEach(ev=>document.addEventListener(ev, ()=>{ PE.lastUserAct = Date.now(); }, {passive:true, capture:true})); // [v15.7] 보는 것도 함께 있는 것 — 스크롤·탐색은 침묵이 아니다
   let __silenceShown = false; // [v15.6] 침묵 처리 — 세션당 1회, 재촉 금지
   setInterval(()=>{
     const idle = Date.now() - PE.lastUserAct;
-    if(!__silenceShown && idle > 40000 && idle < 70000 && (state.facts||[]).length>0 && state.petName){
+    const viewing = document.querySelector('.tabBtn.active') && document.querySelector('.tabBtn.active').dataset.tab !== 'chat'; // 기억지도·관계창 열람 중
+    if(!__silenceShown && !viewing && idle > 40000 && idle < 70000 && (state.facts||[]).length>0 && state.petName){
       __silenceShown = true;
       showBubble('천천히 해~ 나 여기 있어.');
       document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'behavior_shown',d:{b:'silent_company',presence:'waiting',bond:peBondState(),seq:++PE.seq}}}));
