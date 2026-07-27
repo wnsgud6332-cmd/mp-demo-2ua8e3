@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v15.5';
+  const APP_VER = 'v15.6';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1623,7 +1623,7 @@
       speakSupertone(text).then(()=>{
         const L=window.__stLog||{};
         document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_used',d:{engine:'supertone',slot:L.slot,voice:L.name,id:L.id}}}));
-        showVoiceDebug(APP_VER+' | Slot: '+L.slot+' | Voice: '+L.name+'\nID: '+String(L.id).slice(0,22)+'\nModel: '+L.model+' | Search: '+L.search+' | TTS: '+L.tts);
+        if(location.hash==='#diag'||location.hash==='#stdiag') showVoiceDebug(APP_VER+' | Slot: '+L.slot+' | Voice: '+L.name+'\nID: '+String(L.id).slice(0,22)+'\nModel: '+L.model+' | Search: '+L.search+' | TTS: '+L.tts); // [v15.6 PRS-001] 진단 헤더는 요청 시에만 — 평시 화면은 미르만
       }).catch((err)=>{
         // [P0 지시] Fallback 금지 — 오류를 표시하고 재생하지 않는다 (버그를 숨기지 않는다)
         const L=window.__stLog||{};
@@ -2098,7 +2098,7 @@
   function peBondState(){ return ['forming','budding','steady','deep','lifelong'][Math.min(relStageIndex(),4)]; }
   function peRecentFact(f){ return f[f.length-1].t.replace(/\.$/,''); }
   function pePresence(){
-    if(Date.now() - PE.lastUserAct < 30000) return 'accompanying';
+    if(Date.now() - PE.lastUserAct < 20000) return 'accompanying';
     if(PE.justReturned) return 'greeting';
     if((state.facts||[]).length > 0 && new Date().getHours() >= 21) return 'observing';
     return 'resting';
@@ -2135,10 +2135,19 @@
     if(line && Date.now() - PE.lastExpress > 180000){ showBubble(line); PE.lastExpress = Date.now(); }
   }
   ['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev, ()=>{ PE.lastUserAct = Date.now(); }, {passive:true}));
+  let __silenceShown = false; // [v15.6] 침묵 처리 — 세션당 1회, 재촉 금지
+  setInterval(()=>{
+    const idle = Date.now() - PE.lastUserAct;
+    if(!__silenceShown && idle > 40000 && idle < 70000 && (state.facts||[]).length>0 && state.petName){
+      __silenceShown = true;
+      showBubble('천천히 해~ 나 여기 있어.');
+      document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'behavior_shown',d:{b:'silent_company',presence:'waiting',bond:peBondState(),seq:++PE.seq}}}));
+    }
+  }, 10000);
   document.addEventListener('visibilitychange', ()=>{
     if(!document.hidden){ PE.justReturned = true; setTimeout(()=>{ PE.justReturned = false; }, 8000); PE.lastUserAct = Date.now(); }
   });
-  setInterval(peTick, 45000);
+  setInterval(peTick, 30000);
 })();
 </script>
 
