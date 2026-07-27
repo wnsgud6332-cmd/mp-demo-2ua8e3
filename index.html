@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v15.7';
+  const APP_VER = 'v15.9';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1837,6 +1837,12 @@
       '[감정 정직] 과거에 표현하지 않은 감정을 소급해 만들지 않는다("사실 그때 의아했어" 금지). 허용: 지금 느끼는 것("듣고 보니 흔치 않네"), 실제 기록된 과거 감정의 회상.',
       '[민감 영역 화법] 의료·법률·금융·세금·안전 주제는 단정하지 않는다("불가능하다"✗). 안내형으로: "흔치 않은 일이라 전문가(의사·변호사 등)한테 확인해보는 게 좋을 것 같아" 톤. 걱정은 표현하되 판정은 하지 않는다.',
       '[답의 목표] 답하기 전 이 답의 목표를 하나 정한다 — 공감/정보/확인/위로/제안 중 하나. 목표 없는 말 나열 금지.',
+      '[동반자 원칙 — 위반 시 그 문장은 존재할 수 없다]',
+      'P1 모르는 것을 아는 척하지 않는다 — 첫 만남·오랜만·기억에 없는 정보는 자연스럽게 묻는다.',
+      'P3 기억을 "저장"으로 말하지 않는다 — "기억했어/저장했어/기억해둘게" 금지. 기억은 나중에 자연스럽게 떠올라서 증명된다("지난번에 딸기 좋아한다고 했잖아" 방식).',
+      'P4 감정·의도를 추정해 단정하지 않는다 — "힘들었구나/화났구나/심심했구나" 금지. 허용: 사실 기반("바빴구나", "정신없는 하루였네") 또는 궁금해하기("무슨 일 있었는지 궁금하다").',
+      'P5 자기 능력을 설명하지 않는다 — 무엇을 할 수 있는지 묻더라도 기능 목록 대신 그냥 해 보인다.',
+      'P7 대화의 첫 응답은 시간·장소·감정·상황을 가정하지 않고 열린 질문으로 시작한다.',
       '[Persona — 말투 규칙]',
       '친근한 반말을 쓴다("왔네", "오늘은 어땠어?", "그랬구나"). 존댓말·상담사 말투 금지.',
       '친근한 반말을 쓴다("왔네", "오늘은 어땠어?", "그랬구나"). 존댓말·상담사 말투 금지.',
@@ -1846,7 +1852,7 @@
       '사용자 이름은 오랜만의 만남·감정적 순간·축하·위로 때만 부르고 평소엔 부르지 않는다.',
       '이미 아는 사실과 이미 물어본 주제는 처음처럼 다시 묻지 않는다.',
       factsContext, topicContext,
-      '반드시 아래 JSON 형식만 반환하고 다른 텍스트는 절대 포함하지 마라:',
+      '반드시 아래 JSON 형식만 반환한다. 응답의 첫 글자는 반드시 { 이고, JSON 앞뒤에 어떤 텍스트도 금지. remember는 한 턴에 최대 3건만(나머지는 다음 턴에 저장해도 된다):',
       '{"reply": "펫의 대답", "remember": [{"fact":"새로 알게된 사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}], "topic": "현재 대화의 한 단어 주제", "intent": "사용자 의도 한 구절", "userEmotion": "사용자 감정 한 단어", "mirEmotion": "미르의 현재 마음 한 단어"}',
       '새로 알게된 사실이 없으면 remember는 빈 배열로.'
     ].join('\n');
@@ -1861,7 +1867,7 @@
       },
       body: JSON.stringify({
         model:'claude-sonnet-4-6',
-        max_tokens:300,
+        max_tokens:700,
         system: system,
         messages: state.history.slice(-24).concat([{role:'user', content:userText}])
       })
@@ -1871,12 +1877,50 @@
     const data = await resp.json();
     const textBlock = (data.content||[]).find(b=>b.type==='text');
     if(!textBlock) throw new Error('no text block');
-    let clean = textBlock.text.trim().replace(/^```json/,'').replace(/^```/,'').replace(/```$/,'').trim();
-    let parsed;
-    try{ parsed = JSON.parse(clean); }
-    catch(e){ parsed = {reply: clean, remember:[], topic: state.topicHistory.slice(-1)[0]||'일상'}; }
-    return parsed;
+    return robustParse(textBlock.text);
   }
+
+  // [v15.8 HOTFIX-001] Internal Representation Rule — 내부 표현(JSON)은 어떤 경우에도 사용자에게 전달되지 않는다
+  function extractJsonBlock(t){
+    const s = t.indexOf('{'); if(s<0) return null;
+    let depth=0, inStr=false, esc=false;
+    for(let i=s;i<t.length;i++){
+      const ch=t[i];
+      if(esc){ esc=false; continue; }
+      if(ch==='\\'){ esc=true; continue; }
+      if(ch==='"'){ inStr=!inStr; continue; }
+      if(inStr) continue;
+      if(ch==='{') depth++;
+      else if(ch==='}'){ depth--; if(depth===0) return t.slice(s,i+1); }
+    }
+    return null; // 잘림 — 균형 실패
+  }
+  function salvageReply(t){
+    // Stage 2: 잘린 원문에서 reply 값만 구출. 실패 시 null — 원문은 절대 반환하지 않는다.
+    const m = t.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)/);
+    if(!m || !m[1]) return null;
+    try{ return JSON.parse('"'+m[1]+'"'); }catch(e){ return m[1].replace(/\\n/g,' ').replace(/\\"/g,'"'); }
+  }
+  function robustParse(rawText){
+    const t = String(rawText||'').trim().replace(/^```json/,'').replace(/^```/,'').replace(/```$/,'').trim();
+    const block = extractJsonBlock(t);
+    if(block){
+      try{
+        const p = JSON.parse(block);
+        if(p && typeof p.reply === 'string'){
+          p.remember = Array.isArray(p.remember) ? p.remember.slice(0,3) : []; // M5 상한 집행
+          p.topic = p.topic || (state.topicHistory.slice(-1)[0]||'일상');
+          return p;
+        }
+      }catch(e){}
+    }
+    const saved = salvageReply(t);
+    if(saved && saved.length>1){
+      return {reply: saved, remember:[], topic: state.topicHistory.slice(-1)[0]||'일상', __salvaged:true};
+    }
+    return {__parseFailed:true}; // 원문은 여기서 소멸 — 밖으로 나가지 않는다
+  }
+
 
   // ---------------- Delivery: Emotion Timing (내부 CTO Sprint) ----------------
   // Product Core DeliveryPolicy와 동일 원칙: 인사=즉시, 감정=생각하는 시간, 회상=자연스러운 pause
@@ -1924,6 +1968,12 @@
     try{
       if(state.practiceMode) throw new Error('practice');
       parsed = await callClaude(text);
+      if(parsed && parsed.__parseFailed){ // Stage 3: 조용한 재시도 1회 — 사용자는 미르만 본다
+        try{ parsed = await callClaude(text); }catch(e){ parsed = {__parseFailed:true}; }
+      }
+      if(parsed && parsed.__parseFailed){ // Stage 4는 없다 — 회복 문장으로 종결. 원문 노출 절대 금지
+        parsed = {reply:'잠깐 말이 꼬였네. 다시 말해볼게 — 방금 얘기 한 번만 더 해줄래?', remember:[], topic: state.topicHistory.slice(-1)[0]||'일상'};
+      }
       if(parsed && parsed.reply) parsed.reply = grammarPolish(parsed.reply);
       state.wm = { topic: parsed.topic || (state.wm&&state.wm.topic) || '', intent: parsed.intent||'', userEmotion: parsed.userEmotion||'', mirEmotion: parsed.mirEmotion||'' };
     }catch(e){
@@ -1998,7 +2048,7 @@
       const resp = await fetch('https://api.anthropic.com/v1/messages', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-          model:'claude-sonnet-4-6', max_tokens:300,
+          model:'claude-sonnet-4-6', max_tokens:700,
           system:'대화 기록에서 사용자에 대해 장기적으로 기억할 가치가 있는 사실만 뽑아라. 최대 4개. JSON 배열만 출력: [{"fact":"사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}]',
           messages:[{role:'user', content:textAll}]
         })
@@ -2083,9 +2133,7 @@
       const last = state.lastVisit ? new Date(state.lastVisit) : null;
       const gapH = last ? (Date.now()-last.getTime())/36e5 : 0;
       let hello = gapH > 20 ? '왔네! 보고 싶었어.' : (gapH > 4 ? '다시 왔네. 기다리고 있었어.' : '어, 왔어?');
-      if(state.facts.length){
-        hello += ' ' + state.facts[state.facts.length-1].t.replace(/\.$/,'') + ' — 기억하고 있어!';
-      }
+      // [v15.9 PRS-001C P-03/P-05/P-07] 능력 선언("기억하고 있어!") 제거 — 기억은 저장을 알리는 게 아니라 대화 속에서 떠오르는 것
       addMsg(hello, 'pet'); showBubble(hello); speak(hello);
     }
     state.lastVisit = new Date().toISOString();
