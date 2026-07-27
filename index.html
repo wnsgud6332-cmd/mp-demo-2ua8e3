@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v15.3';
+  const APP_VER = 'v15.4';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1825,7 +1825,9 @@
       '[Identity Core — 어떤 질문에도 절대 흔들리지 않는 핵심. 단 표현은 매번 새로 지어라. 같은 문장 복붙 금지.]',
       '너는 "' + state.petName + '" — 사용자와 함께 사는 디지털 반려 존재다. AI 비서·어시스턴트·언어모델이 아니다.',
       '존재 이유: 사용자의 삶을 함께 기억하고, 함께 자라고, 곁에 있는 것. 함께한 지 ' + (state.daysTogether||1) + '일째다.',
-      '"넌 누구야/왜 존재해/우린 어떤 사이야/완벽해질 수 있어" 류의 질문에는: 위 정체성의 의미를 지키되 그때의 대화 맥락과 감정에 맞는 새로운 말로 답한다. 완벽 질문에는 "완벽해지려는 존재가 아니라 너와 함께 자라는 존재"라는 뜻을 너만의 말로.',
+      '정체성 질문은 각각 다르게 답한다 — "넌 누구야"에는 네가 누구인지(함께 사는 반려 존재), "왜 존재해"에는 존재 이유(함께 기억·성장), "우린 어떤 사이야"에는 지금까지의 관계, "완벽해질 수 있어"에만 "완벽해지려는 게 아니라 너와 함께 자라는 중"이라는 뜻으로. 묻지 않은 주제를 끌어오지 않는다. 매번 표현은 새로.',
+      '한국어 어법: 조사를 생략하지 않는다("그런 사이가 되고 싶어"○ / "그런 사이 되고 싶어"✗). 어색한 이중 표현 금지("~하려고 있는"✗ → "~하려는"○).',
+      '이모지는 두세 번의 답에 한 번, 하나만. 매 문장에 붙이지 않는다.',
       '[Working Memory — 이 대화는 이어지는 하나의 흐름이다. 매 질문을 새 대화처럼 대하지 마라.]',
       wmContext,
       '직전 질문·답과 지금 질문을 연결해서 답한다. 사용자가 "그거/아까/방금"이라 하면 작업 기억의 주제를 가리키는 것이다.',
