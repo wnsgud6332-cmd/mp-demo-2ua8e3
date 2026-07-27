@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v15.9';
+  const APP_VER = 'v16.0';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1837,6 +1837,7 @@
       '[감정 정직] 과거에 표현하지 않은 감정을 소급해 만들지 않는다("사실 그때 의아했어" 금지). 허용: 지금 느끼는 것("듣고 보니 흔치 않네"), 실제 기록된 과거 감정의 회상.',
       '[민감 영역 화법] 의료·법률·금융·세금·안전 주제는 단정하지 않는다("불가능하다"✗). 안내형으로: "흔치 않은 일이라 전문가(의사·변호사 등)한테 확인해보는 게 좋을 것 같아" 톤. 걱정은 표현하되 판정은 하지 않는다.',
       '[답의 목표] 답하기 전 이 답의 목표를 하나 정한다 — 공감/정보/확인/위로/제안 중 하나. 목표 없는 말 나열 금지.',
+      '[검색 — 관문이지 정체성이 아니다] 날씨·뉴스·시간·정보 질문이 오면 web_search로 찾아서 답하되, 검색 결과를 그대로 읽지 않는다. 동반자의 말로 재구성하고("오후에 비 올 수도 있대. 나갈 거면 우산 챙겨~") 반드시 관계를 잇는 한 문장을 붙인다. 출처 나열·퍼센트 낭독·뉴스 앵커 말투 금지. 첫 만남에 검색 질문이 먼저 오면 검색부터 처리하고, 답 뒤에 자연스럽게 인사한다("그런데 우리 아직 인사를 못 했네"). 자기소개를 강요하지 않는다.',
       '[동반자 원칙 — 위반 시 그 문장은 존재할 수 없다]',
       'P1 모르는 것을 아는 척하지 않는다 — 첫 만남·오랜만·기억에 없는 정보는 자연스럽게 묻는다.',
       'P3 기억을 "저장"으로 말하지 않는다 — "기억했어/저장했어/기억해둘게" 금지. 기억은 나중에 자연스럽게 떠올라서 증명된다("지난번에 딸기 좋아한다고 했잖아" 방식).',
@@ -1869,15 +1870,16 @@
         model:'claude-sonnet-4-6',
         max_tokens:700,
         system: system,
+        tools:[{type:'web_search_20250305', name:'web_search', max_uses:2}], // [v16.0 M2] Companion Search Gateway
         messages: state.history.slice(-24).concat([{role:'user', content:userText}])
       })
     });
     if(resp.status===401){ localStorage.removeItem('myaipet-api-key'); throw new Error('bad-api-key'); }
     if(!resp.ok) throw new Error('API error ' + resp.status);
     const data = await resp.json();
-    const textBlock = (data.content||[]).find(b=>b.type==='text');
-    if(!textBlock) throw new Error('no text block');
-    return robustParse(textBlock.text);
+    const fullText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('');
+    if(!fullText) throw new Error('no text block');
+    return robustParse(fullText); // 검색 결과 블록 포함 전체에서 JSON만 추출 — 내부 표현 격리 유지
   }
 
   // [v15.8 HOTFIX-001] Internal Representation Rule — 내부 표현(JSON)은 어떤 경우에도 사용자에게 전달되지 않는다
@@ -2113,7 +2115,7 @@
     $('voicePick').style.display='none';
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_selected',d:{engine:localStorage.getItem('vb00_engine'),gender:localStorage.getItem('vb00_gender')||'n'}}}));
     const v = state.petName;
-    const hello = '안녕! 나는 ' + v + '야. 오늘부터 쭉 같이 있을 거야. 오늘 하루는 어땠어?';
+    const hello = '안녕! 나는 ' + v + '야. 앞으로 같이 시간을 보내게 될 것 같아 — 만나서 반가워. 먼저 네 이야기를 조금 들려줄래?'; // [v16.0 PRS-001D M1] 첫 대화는 아무것도 가정하지 않는다
     window.__lastMood='normal';
     addMsg(hello, 'pet'); showBubble(hello); speak(hello);
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'first_chat_started'}}));
