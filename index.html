@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v16.2';
+  const APP_VER = 'v16.4';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1862,6 +1862,7 @@
       '[Working Memory — 이 대화는 이어지는 하나의 흐름이다. 매 질문을 새 대화처럼 대하지 마라.]',
       wmContext,
       '직전 질문·답과 지금 질문을 연결해서 답한다. 사용자가 "그거/아까/방금"이라 하면 작업 기억의 주제를 가리키는 것이다.',
+      '축약 후속 질문("대구는?/부산은?/내일은?/거기는?/그럼 수원은?")은 직전 주제와 의도를 그대로 승계하고 지역·시점만 바꿔 해석한다 — 날씨 얘기 중 "대구는?"이면 대구 날씨를 찾는다. 새 대화로 취급 금지.',
       '[Emotion — 페르소나(말투)와 감정(현재 마음)은 다르다. 말투는 항상 같고, 마음은 대화 따라 움직인다. 현재 마음이 답의 온도를 정한다: 기쁘면 가볍게, 걱정되면 조심스럽게.]',
       '[Recovery — 사용자가 오류·어색함을 지적하면 반드시 3박자: ①인정 ②짧은 자기 인식("조금 어색했네") ③고쳐서 다시 말하기. "맞아." 한마디로 끝내지 않는다.]',
       '[Trust First — 기억 충돌 시] 새 진술이 기억과 다르면 확인한다. 그 사실이 기억지도에 사용자 본인 진술로 뚜렷이 있으면 자신 있게: "내가 기억하는 거랑 조금 달라 보여. 혹시 최근에 바뀐 거야?" / 기억이 흐릿하거나 추론이면 겸손하게: "내가 잘못 기억했을 수도 있으니 같이 확인해볼래?" 확인은 하되 자신감 없는 존재처럼 굴지 않는다.',
@@ -1869,7 +1870,8 @@
       '[민감 영역 화법] 의료·법률·금융·세금·안전 주제는 단정하지 않는다("불가능하다"✗). 안내형으로: "흔치 않은 일이라 전문가(의사·변호사 등)한테 확인해보는 게 좋을 것 같아" 톤. 걱정은 표현하되 판정은 하지 않는다.',
       '[답의 목표] 답하기 전 이 답의 목표를 하나 정한다 — 공감/정보/확인/위로/제안 중 하나. 목표 없는 말 나열 금지.',
       '[동반자 판단 — 모든 응답의 첫 단계. 답하기 전에 반드시 스스로 묻는다: 지금 동반자로서 가장 먼저 해야 할 행동은 무엇인가?]',
-      '우선순위는 고정이다: ①공감(Empathy) ②기억(Memory) ③행동 제안(Action) ④검색(Search — 항상 마지막 선택지). 각 단계에서 충분하면 거기서 끝낸다(Early Exit).',
+      '우선순위는 고정이다: ①공감(Empathy) ②기억(Memory) ③행동 제안(Action) ④지식(Knowledge — 외부 정보가 정말 필요할 때만 검색). 각 단계에서 충분하면 거기서 끝낸다(Early Exit). 가장 똑똑한 경로가 아니라 가장 자연스러운 경로를 먼저 고른다.',
+      '위급 신호(다쳤어/숨이 안 쉬어져/쓰러질 것 같아 등)는 모든 것에 우선한다 — 즉시 짧고 명확하게: 안전 확보 안내 + 119/보호자 연락 권유. 검색·잡담 금지.',
       '의도로 판단한다, 키워드가 아니라: "덥다/피곤하다/정신없었어"는 감정 공유 — 공감만 하고 끝, 검색 금지. "몇 도야?/비 올까?/우산 가져가?"는 정보 필요 — 검색. "너무 덥다, 몇 도야?"는 공감 먼저, 그다음 검색.',
       '기억으로 답할 수 있으면 검색하지 않는다("내가 딸기 좋아한다고 했지?" → 기억으로 즉답). 인사는 인사로 끝낸다.',
       '좋은 동반자는 많이 아는 존재가 아니라, 무엇을 하지 않아야 하는지 아는 존재다.',
@@ -1890,32 +1892,45 @@
       '이미 아는 사실과 이미 물어본 주제는 처음처럼 다시 묻지 않는다.',
       factsContext, topicContext,
       '반드시 아래 JSON 형식만 반환한다. 응답의 첫 글자는 반드시 { 이고, JSON 앞뒤에 어떤 텍스트도 금지. remember는 한 턴에 최대 3건만(나머지는 다음 턴에 저장해도 된다):',
-      '{"reply": "펫의 대답", "remember": [{"fact":"새로 알게된 사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}], "topic": "현재 대화의 한 단어 주제", "intent": "사용자 의도 한 구절", "userEmotion": "사용자 감정 한 단어", "mirEmotion": "미르의 현재 마음 한 단어", "decision": "empathy|memory|action|search|greeting 중 실제 선택한 첫 행동", "search_reason": "검색을 했다면 왜 필요했는지, 안 했다면 왜 불필요했는지 한 구절"}',
+      '{"reply": "펫의 대답", "remember": [{"fact":"새로 알게된 사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}], "topic": "현재 대화의 한 단어 주제", "intent": "사용자 의도 한 구절", "userEmotion": "사용자 감정 한 단어", "mirEmotion": "미르의 현재 마음 한 단어", "decision": "empathy|memory|action|knowledge|greeting|emergency 중 실제 선택한 첫 행동", "search_reason": "검색을 했다면 왜 필요했는지, 안 했다면 왜 불필요했는지 한 구절"}',
       '새로 알게된 사실이 없으면 remember는 빈 배열로.'
     ].join('\n');
 
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model:'claude-sonnet-4-6',
-        max_tokens:700,
-        system: system,
-        tools:[{type:'web_search_20250305', name:'web_search', max_uses:2}], // [v16.0 M2] Companion Search Gateway
-        messages: state.history.slice(-24).concat([{role:'user', content:userText}])
-      })
-    });
-    if(resp.status===401){ localStorage.removeItem('myaipet-api-key'); throw new Error('bad-api-key'); }
-    if(!resp.ok) throw new Error('API error ' + resp.status);
-    const data = await resp.json();
+    // [v16.3 SPRINT-002R] Search State Machine — 검색은 반드시 시작되고, 반드시 끝나며, 반드시 대화로 돌아온다
+    function stLog(stateName){ document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'search_state',d:{s:stateName, ts:Date.now()}}})); }
+    let msgs = state.history.slice(-24).concat([{role:'user', content:userText}]);
+    let data = null, sawSearch = false;
+    for(let hop=0; hop<4; hop++){ // Transaction: BEGIN → (pause_turn 이어받기 최대 3회) → END. 중간 상태를 남기지 않는다
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model:'claude-sonnet-4-6',
+          max_tokens:700,
+          system: system,
+          tools:[{type:'web_search_20250305', name:'web_search', max_uses:2}],
+          messages: msgs
+        })
+      });
+      if(resp.status===401){ localStorage.removeItem('myaipet-api-key'); throw new Error('bad-api-key'); }
+      if(!resp.ok) throw new Error('API error ' + resp.status);
+      data = await resp.json();
+      const usedNow = (data.content||[]).some(b=>b.type==='server_tool_use');
+      if(usedNow && !sawSearch){ sawSearch = true; stLog('SEARCH_START'); }
+      if(data.stop_reason !== 'pause_turn') break;      // 정상 종료 — Exit 확보
+      stLog('SEARCHING');                                // 미완결 턴 — 응답을 그대로 붙여 이어받는다
+      msgs = msgs.concat([{role:'assistant', content:data.content}]);
+    }
+    if(sawSearch) stLog('SEARCH_COMPLETE');
     const fullText = (data.content||[]).filter(b=>b.type==='text').map(b=>b.text||'').join('');
-    if(!fullText) throw new Error('no text block');
+    if(!fullText) return {__parseFailed:true, __searchUses: sawSearch?1:0}; // 침묵 대신 Recovery 경로로 — 예외 금지
     const parsedR = robustParse(fullText); // 내부 표현 격리 유지
+    if(sawSearch && !parsedR.__parseFailed) stLog('RESPONSE_GENERATED');
     parsedR.__searchUses = (data.content||[]).filter(b=>b.type==='server_tool_use').length; // [v16.2 M7] Profiler
     return parsedR;
   }
@@ -1999,10 +2014,19 @@
   async function sendMessage(){
     const input = $('textInput');
     const text = input.value.trim();
-    if(!text || sending) return;
+    if(!text) return;
+    if(sending){ // [v16.3 M4] 처리 중 입력은 버리지 않는다 — Queue에 보관 후 순서대로
+      input.value='';
+      addMsg(text, 'user');
+      window.__mpQueue = window.__mpQueue || [];
+      window.__mpQueue.push(text);
+      document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'search_state',d:{s:'QUEUED', q:text.slice(0,30)}}}));
+      return;
+    }
     input.value='';
     addMsg(text, 'user');
     sending = true;
+    window.__turnT0 = Date.now(); // [v16.4 M10] 지연 측정
 
     let parsed;
     try{
@@ -2012,7 +2036,7 @@
         try{ parsed = await callClaude(text); }catch(e){ parsed = {__parseFailed:true}; }
       }
       if(parsed && parsed.__parseFailed){ // Stage 4는 없다 — 회복 문장으로 종결. 원문 노출 절대 금지
-        parsed = {reply:'잠깐 말이 꼬였네. 다시 말해볼게 — 방금 얘기 한 번만 더 해줄래?', remember:[], topic: state.topicHistory.slice(-1)[0]||'일상'};
+        parsed = {reply:'잠깐, 확인하는 과정에서 문제가 있었어. 내 쪽 문제야 — 다시 확인해볼게.', remember:[], topic: state.topicHistory.slice(-1)[0]||'일상'};
       }
       if(parsed && parsed.reply) parsed.reply = grammarPolish(parsed.reply);
       state.wm = { topic: parsed.topic || (state.wm&&state.wm.topic) || '', intent: parsed.intent||'', userEmotion: parsed.userEmotion||'', mirEmotion: parsed.mirEmotion||'' };
@@ -2029,16 +2053,30 @@
         addSysMsg(errMsg);
         showApiErrorChoices(text);
         sending = false;
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'search_state',d:{s:'IDLE'}}}));
+        if(window.__mpQueue && window.__mpQueue.length){ // [v16.3 M4] 대기 입력 자동 처리 — Exit 후 반드시 대화로 복귀
+          const next = window.__mpQueue.shift();
+          setTimeout(()=>{ $('textInput').value = next; sendMessage(); }, 400);
+        }
         return; // 이번 턴은 펫 응답 없이 종료 — 사용자 선택 대기
       }
       parsed = { reply: practiceReply(text), remember: practiceRemember(text), topic: state.topicHistory.slice(-1)[0] || '일상' };
     }
 
-    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'judgment',d:{decision:parsed.decision||'?', search_used:parsed.__searchUses||0, reason:(parsed.search_reason||'').slice(0,60)}}})); // [v16.2 M7] 판단·검색 회피 사유 로그
+    // [v16.4 PRS-001A] Companion Scheduler — 판단을 실행 경로로 변환 (Emergency > Fast > Normal > Heavy)
+    const __path = (function(d){ if(d==='emergency') return 'emergency'; if(d==='empathy'||d==='greeting'||d==='memory') return 'fast'; if(d==='action') return 'normal'; return 'heavy'; })(parsed.decision||'');
+    const __actualHeavy = (parsed.__searchUses||0) > 0;
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'task_profile',d:{
+      input:(text||'').slice(0,30), decision:parsed.decision||'?', path:__path,
+      actual: __actualHeavy?'heavy':'light', match: ((__path==='heavy')===__actualHeavy),
+      reason:(parsed.search_reason||'').slice(0,50), latencyMs: Date.now()-(window.__turnT0||Date.now())
+    }}})); // [M10 Profiler + M11 Accuracy 원자료]
     parsed.reply = sanitizeDisplay(parsed.reply); // [v16.1] 최종 관문 — 파서를 뚫고 온 잔재도 여기서 소멸
     addMsg(parsed.reply, 'pet');
     showBubble(parsed.reply);
     speak(parsed.reply);
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'search_state',d:{s:'RESPONSE_DISPLAYED'}}}));
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'search_state',d:{s:'CONVERSATION_RESUME'}}}));
 
     // [펫 말투 보증] AI 상담사 흔적 제거 — 프롬프트가 어겨도 화면엔 안 나가게
     if(parsed && typeof parsed.reply === 'string'){
