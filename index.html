@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v16.0';
+  const APP_VER = 'v16.1';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1616,7 +1616,38 @@
   let resumeWatchdog = null;       // [끊김 방지] Chrome(안드) 장문 멈춤 버그 — 주기적 resume
   function stopWatchdog(){ if(resumeWatchdog){ clearInterval(resumeWatchdog); resumeWatchdog=null; } }
 
+  // [v16.1 SPRINT-001] Output Sanitizer — 내부 표현은 어떤 경로로도 사용자에게 닿지 않는다 (최종 관문)
+  function sanitizeDisplay(t){
+    if(!t) return t;
+    let s = String(t);
+    s = s.replace(/<\/?(?:cite|source|antml[^>\s]*)[^>]*>/gi, '');   // 인용·시스템 태그 (내용은 보존)
+    s = s.replace(/<[^>\n]{1,80}>/g, '');                            // 잔여 HTML/XML 태그
+    s = s.replace(/\[(?:\d{1,2}|출처[^\]]{0,20})\]/g, '');           // [1][2]·[출처…] 각주 마커
+    s = s.replace(/```[a-z]*\n?|```/g, '');                          // 코드펜스 잔재
+    s = s.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/(^|\s)\*([^*\s][^*]*)\*(?=\s|$)/g, '$1$2'); // 마크다운 강조 표기 제거
+    s = s.replace(/[\u200B-\u200D\uFEFF]/g, '');                     // 제로폭 문자
+    s = s.replace(/[ \t]{2,}/g,' ').trim();
+    return s;
+  }
+  // [v16.1 SPRINT-001] Text Normalization Rule — 기호를 삭제하지 않는다, 의미로 변환한다 (TTS 전용)
+  function ttsNormalize(t){
+    if(!t) return t;
+    let s = sanitizeDisplay(String(t));
+    s = s.replace(/(\d+(?:\.\d+)?)\s*[~∼〜]\s*(\d+(?:\.\d+)?)\s*℃/g, '$1도에서 $2도');
+    s = s.replace(/(\d+(?:\.\d+)?)\s*[~∼〜]\s*(\d+(?:\.\d+)?)\s*(%|퍼센트)/g, '$1퍼센트에서 $2퍼센트');
+    s = s.replace(/(\d+(?:\.\d+)?)\s*[~∼〜]\s*(\d+(?:\.\d+)?)/g, '$1에서 $2');   // 일반 숫자 범위
+    s = s.replace(/(\d+(?:\.\d+)?)\s*℃/g, '$1도');
+    s = s.replace(/(\d+(?:\.\d+)?)\s*%/g, '$1퍼센트');
+    s = s.replace(/(\d+(?:\.\d+)?)\s*mm/gi, '$1밀리미터');
+    s = s.replace(/(\d+(?:\.\d+)?)\s*km/gi, '$1킬로미터');
+    s = s.replace(/(\d+)\s*:\s*(\d{2})(?!\d)/g, '$1시 $2분');
+    s = s.replace(/[~∼〜]/g, '');                                    // 어미 물결(좋아~)은 억양 — 음성에선 무음 처리
+    s = s.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '');   // 이모지 낭독 방지
+    s = s.replace(/\s{2,}/g,' ').trim();
+    return s;
+  }
   function speak(text){
+    text = ttsNormalize(text); // [v16.1] 화면과 음성의 분리 — 화면은 32~39℃, 음성은 32도에서 39도
     if(!state.ttsOn) return;
     // [VB-00] 엔진 라우팅 — Pause·전처리 정책은 양 엔진 동일 조건
     if(vb00Engine()==='supertone'){
@@ -1996,6 +2027,7 @@
       parsed = { reply: practiceReply(text), remember: practiceRemember(text), topic: state.topicHistory.slice(-1)[0] || '일상' };
     }
 
+    parsed.reply = sanitizeDisplay(parsed.reply); // [v16.1] 최종 관문 — 파서를 뚫고 온 잔재도 여기서 소멸
     addMsg(parsed.reply, 'pet');
     showBubble(parsed.reply);
     speak(parsed.reply);
