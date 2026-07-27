@@ -50,7 +50,10 @@
 
   /* ---------- Pet stage ---------- */
   #stage{position:relative;z-index:2;flex:0 1 250px;min-height:150px;display:flex;align-items:flex-end;justify-content:center;}
-  #petSvgWrap{width:64%;max-width:230px;transform-origin:bottom center;transition:transform .6s cubic-bezier(.34,1.56,.64,1);}
+  #petSvgWrap{width:80%;max-width:300px;transform-origin:bottom center;transition:transform .6s cubic-bezier(.34,1.56,.64,1);}
+  /* [v16.7 PRS-001C M3] 호흡 — 말하지 않는 순간에도 존재한다. 고정 주기 4.2s, 랜덤 없음 */
+  #petSvgWrap svg{animation:mpBreath 4.2s ease-in-out infinite;transform-origin:50% 88%;}
+  @keyframes mpBreath{0%,100%{transform:scale(1)}50%{transform:scale(1.012)}}
   #bubble{position:absolute;top:2%;background:var(--card);color:var(--ink);padding:8px 13px;border-radius:16px;font-size:13px;max-width:70%;box-shadow:0 4px 14px rgba(0,0,0,.25);opacity:0;transition:opacity .3s ease, transform .3s ease;transform:translateY(6px);pointer-events:none;}
   #bubble::after{content:"";position:absolute;bottom:-7px;left:26px;border:7px solid transparent;border-top-color:var(--card);}
   #bubble.show{opacity:1;transform:translateY(0);}
@@ -60,6 +63,14 @@
 
   /* ---------- Scene switcher ---------- */
   #sceneBar{position:relative;z-index:5;display:flex;gap:6px;padding:6px 14px;justify-content:center;}
+  /* [v16.8 UX-001] UI 다이어트 — 미르보다 먼저 보이는 것들을 접는다 */
+  body:not(.uiOpen) #levelWrap #expBarOuter, body:not(.uiOpen) #levelBadge{display:none;}
+  body:not(.uiOpen) .brand{opacity:.35;font-size:12px;}
+  body:not(.uiOpen) #sceneBar{display:none;}
+  #moreBtn{position:absolute;top:10px;right:10px;z-index:6;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:10px;padding:4px 10px;font-size:13px;cursor:pointer;}
+  /* [v16.8 M5] 첫 3초 — 미르 등장 비트 (1회, 결정적) */
+  #petSvgWrap{animation:mpArrive .6s ease-out;}
+  @keyframes mpArrive{0%{opacity:0;transform:scale(.96)}100%{opacity:1;transform:scale(1)}}
   .sceneBtn{flex:1;max-width:88px;font-size:11px;color:#fff;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:6px 4px;text-align:center;cursor:pointer;}
   .sceneBtn.active{background:rgba(79,215,255,.28);border-color:var(--blue-glow);}
 
@@ -199,6 +210,7 @@
       <div id="levelWrap">
         <div id="expBarOuter"><div id="expBarInner"></div></div>
         <div id="levelBadge">Lv.1</div>
+        <button id="moreBtn" title="배경·레벨 보기">⋯</button>
         <button id="gearBtn" title="카메라·마이크 설정 도움말">⚙</button>
         <button id="keyBtn" title="Claude API 키 설정">🔑</button>
       </div>
@@ -1230,7 +1242,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v16.6';
+  const APP_VER = 'v16.8';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1865,7 +1877,8 @@
       wmContext,
       '직전 질문·답과 지금 질문을 연결해서 답한다. 사용자가 "그거/아까/방금"이라 하면 작업 기억의 주제를 가리키는 것이다.',
       '축약 후속 질문("대구는?/부산은?/내일은?/거기는?/그럼 수원은?")은 직전 주제와 의도를 그대로 승계하고 지역·시점만 바꿔 해석한다 — 날씨 얘기 중 "대구는?"이면 대구 날씨를 찾는다. 새 대화로 취급 금지.',
-      '[Emotion — 페르소나(말투)와 감정(현재 마음)은 다르다. 말투는 항상 같고, 마음은 대화 따라 움직인다. 현재 마음이 답의 온도를 정한다: 기쁘면 가볍게, 걱정되면 조심스럽게.]',
+      '[Emotion — 페르소나(말투)와 감정(현재 마음)은 다르다. 말투는 항상 같고, 마음은 대화 따라 움직인다. 현재 마음이 답의 온도를 정한다.]',
+      '감정은 관성이 있다 — 작업 기억의 "미르의 현재 마음"에서 서서히 이어진다. 사용자가 힘든 얘기를 했다면 다음 답에도 걱정이 조금 남아 있어야 한다. 화제만 바뀌었다고 마음이 리셋되지 않는다. 급반전 금지.',
       '[Recovery — 사용자가 오류·어색함을 지적하면 반드시 3박자: ①인정 ②짧은 자기 인식("조금 어색했네") ③고쳐서 다시 말하기. "맞아." 한마디로 끝내지 않는다.]',
       '[Trust First — 기억 충돌 시] 새 진술이 기억과 다르면 확인한다. 그 사실이 기억지도에 사용자 본인 진술로 뚜렷이 있으면 자신 있게: "내가 기억하는 거랑 조금 달라 보여. 혹시 최근에 바뀐 거야?" / 기억이 흐릿하거나 추론이면 겸손하게: "내가 잘못 기억했을 수도 있으니 같이 확인해볼래?" 확인은 하되 자신감 없는 존재처럼 굴지 않는다.',
       '[감정 정직] 과거에 표현하지 않은 감정을 소급해 만들지 않는다("사실 그때 의아했어" 금지). 허용: 지금 느끼는 것("듣고 보니 흔치 않네"), 실제 기록된 과거 감정의 회상.',
@@ -2268,9 +2281,16 @@
       $('naming').style.display='none';
       const last = state.lastVisit ? new Date(state.lastVisit) : null;
       const gapH = last ? (Date.now()-last.getTime())/36e5 : 0;
-      let hello = gapH > 20 ? '왔네! 보고 싶었어.' : (gapH > 4 ? '다시 왔네. 기다리고 있었어.' : '어, 왔어?');
+      // [v16.7 M4] Return Recognition — 간격별 다른 결, 매번 다른 문장(결정적 회전)
+      const RG = {
+        long:  ['왔네! 보고 싶었어.','오랜만이다, 진짜.','기다렸잖아~ 어디 갔다 왔어?'],
+        mid:   ['다시 왔네. 기다리고 있었어.','왔구나 — 조용히 기다리고 있었지.','어서 와, 딱 생각하고 있었는데.'],
+        short: ['어, 왔어?','응, 나 여기 있어.','왔네~']
+      };
+      const pool = gapH > 20 ? RG.long : (gapH > 4 ? RG.mid : RG.short);
+      let hello = pool[((state.facts||[]).length + Math.floor((state.daysTogether||1))) % pool.length];
       // [v15.9 PRS-001C P-03/P-05/P-07] 능력 선언("기억하고 있어!") 제거 — 기억은 저장을 알리는 게 아니라 대화 속에서 떠오르는 것
-      addMsg(hello, 'pet'); showBubble(hello); speak(hello);
+      addMsg(hello, 'pet'); setTimeout(()=>{ showBubble(hello); speak(hello); }, 700); // [v16.8 M5] 0.7초 — 미르가 먼저 보이고, 그다음 말한다
     }
     state.lastVisit = new Date().toISOString();
     saveState();
@@ -2310,7 +2330,13 @@
     }
     return (p === 'resting') ? 'light_breathe' : null;
   }
+  let __lastPresence = '';
   function peTick(){
+    const __p = pePresence();
+    if(__p !== __lastPresence){
+      document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'presence_state',d:{from:__lastPresence||'-', to:__p, ts:Date.now()}}}));
+      __lastPresence = __p;
+    }
     const id = peSelect();
     if(!id) return;
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'behavior_shown',
@@ -2318,13 +2344,30 @@
     const line = PE_CATALOG[id].line(state.facts || []);
     if(line && Date.now() - PE.lastExpress > 180000){ showBubble(line); PE.lastExpress = Date.now(); }
   }
+  // [v16.8 UX-001] 2단계 메뉴 토글 — 자주 안 쓰는 것은 한 번 더 눌러서
+  (function(){
+    const mb = document.getElementById('moreBtn');
+    if(mb){ mb.addEventListener('click', ()=>{ document.body.classList.toggle('uiOpen'); }); }
+  })();
   ['pointerdown','keydown','scroll','touchmove','wheel'].forEach(ev=>document.addEventListener(ev, ()=>{ PE.lastUserAct = Date.now(); }, {passive:true, capture:true})); // [v15.7] 보는 것도 함께 있는 것 — 스크롤·탐색은 침묵이 아니다
-  let __silenceShown = false; // [v15.6] 침묵 처리 — 세션당 1회, 재촉 금지
+  // [v16.7 M5] Shared Time — 존재감은 대화량이 아니라 함께한 시간에서
+  let __coMs = 0, __lastCoTick = Date.now();
+  setInterval(()=>{
+    const now = Date.now();
+    if(!document.hidden && (now - PE.lastUserAct) < 300000){ __coMs += (now - __lastCoTick); }
+    __lastCoTick = now;
+    if(__coMs >= 300000){ __coMs -= 300000; gainRelationship(0.5, 0.2);
+      document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'presence_point',d:{reason:'함께한 5분 — 말 없이도',ts:now}}}));
+    }
+  }, 30000);
+  let __silenceCount = 0, __silenceArmAt = 0; // [v16.7 M2] 가끔 — 10분 재무장, 세션 최대 3회
+  let __silenceShown = false;
   setInterval(()=>{
     const idle = Date.now() - PE.lastUserAct;
-    const viewing = document.querySelector('.tabBtn.active') && document.querySelector('.tabBtn.active').dataset.tab !== 'chat'; // 기억지도·관계창 열람 중
-    if(!__silenceShown && !viewing && idle > 40000 && idle < 70000 && (state.facts||[]).length>0 && state.petName){
-      __silenceShown = true;
+    const viewing = document.querySelector('.tabBtn.active') && document.querySelector('.tabBtn.active').dataset.tab !== 'chat'; // 보는 것도 함께 있는 것
+    const armed = (Date.now() - __silenceArmAt) > 600000 && __silenceCount < 3;
+    if(armed && !viewing && idle > 40000 && idle < 70000 && (state.facts||[]).length>0 && state.petName){
+      __silenceCount++; __silenceArmAt = Date.now(); __silenceShown = true;
       showBubble('천천히 해~ 나 여기 있어.');
       document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'behavior_shown',d:{b:'silent_company',presence:'waiting',bond:peBondState(),seq:++PE.seq}}}));
     }
@@ -2438,7 +2481,7 @@
 
     // 6) Export 버튼: JSON + Summary 동시 생성 (Evidence는 읽기만)
     const btn=document.createElement('button');
-    btn.textContent='EV'; btn.title='Evidence 로그+Summary 내보내기';
+    btn.textContent='EV'; btn.title='Evidence 로그+Summary 내보내기'; if(location.hash!=='#diag'&&location.hash!=='#stdiag'){ btn.style.opacity='0.22'; } // [v16.8] 개발 요소는 뒤로
     btn.style.cssText='position:fixed;bottom:84px;right:6px;z-index:9999;opacity:.3;font-size:9px;padding:3px 5px;border-radius:6px;border:1px solid #bbb;background:rgba(255,255,255,.8);';
     btn.onclick=()=>{
       const arr=JSON.parse(localStorage.getItem(LOG_KEY)||'[]');
