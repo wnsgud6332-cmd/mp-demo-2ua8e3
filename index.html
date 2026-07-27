@@ -1230,7 +1230,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||'https://summer-sun-fdfb.wnsgud6332.workers.dev');
-  const APP_VER = 'v16.5';
+  const APP_VER = 'v16.6';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1841,7 +1841,9 @@
     for(const x of sents){ const k=x.trim(); if(!k) continue; if(seen.has(k)) continue; seen.add(k); out.push(x); }
     return out.join(' ').trim();
   }
-  async function callClaude(userText, allowTools){
+  async function callClaude(userText, routeName){
+    const route = MODEL_ROUTES[routeName] || MODEL_ROUTES.heavy;
+    const allowTools = !!route.tools;
     const apiKey = getApiKey();
     if(!apiKey) throw new Error('no-api-key');
     const grouped = CATS.map(c=>{
@@ -1910,8 +1912,8 @@
           'anthropic-dangerous-direct-browser-access': 'true'
         },
         body: JSON.stringify({
-          model:'claude-sonnet-4-6',
-          max_tokens: allowTools ? 700 : 400, // [v16.5] Fast 경로는 생성 예산도 가볍게 — 짧은 답에 700은 낭비
+          model: route.model,
+          max_tokens: route.max_tokens, // [v16.6] 경로별 예산 — 라우팅 표가 정의
           system: system,
           ...(allowTools ? {tools:[{type:'web_search_20250305', name:'web_search', max_uses:2}]} : {}), // [v16.5] Fast Path는 도구 자체를 싣지 않는다 — 구조적으로 Search 0회
           messages: msgs
@@ -2031,6 +2033,17 @@
     if(/\?$/.test(s) && /(오늘|내일|지금|요즘|이번 주)/.test(s)) return true;
     return false;
   }
+  // [v16.6 PRS-001C] Latency Architecture — 엔진은 모델에 묶이지 않는다
+  // 모델 교체 = 이 표의 한 줄 수정. 다음 스프린트에서 fast에 경량 모델을 꽂아도 엔진 무변경.
+  const MODEL_ROUTES = {
+    instant: null, // Tier0 — 모델 없음 (0ms)
+    fast:  { model: 'claude-sonnet-4-6', max_tokens: 400, tools: false },
+    heavy: { model: 'claude-sonnet-4-6', max_tokens: 700, tools: true  }
+  };
+  // Intent Classifier 슬롯 — 지금은 규칙 기반(infoLikely). 나중에 초경량 분류 모델로 교체 가능한 단일 함수.
+  function classifyIntent(text){
+    return infoLikely(text) ? 'heavy' : 'fast';
+  }
   let sending = false;
   async function sendMessage(){
     const input = $('textInput');
@@ -2066,17 +2079,17 @@
     let parsed;
     try{
       if(state.practiceMode) throw new Error('practice');
-      const __allowTools = infoLikely(text);
+      const __route = classifyIntent(text); // [v16.6] Intent Classifier 슬롯 — 교체 지점 단일화
       const __tLLM0 = Date.now();
-      parsed = await callClaude(text, __allowTools);
-      if(parsed && !parsed.__parseFailed && !__allowTools && (parsed.decision==='knowledge'||parsed.decision==='search') && !(parsed.__searchUses>0)){
+      parsed = await callClaude(text, __route);
+      if(parsed && !parsed.__parseFailed && __route==='fast' && (parsed.decision==='knowledge'||parsed.decision==='search') && !(parsed.__searchUses>0)){
         // [v16.5] 승격 안전망 — 사전 판별이 놓친 정보 질문은 도구를 싣고 한 번 더
         document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'task_profile',d:{input:text.slice(0,30), decision:'escalate', path:'heavy', actual:'escalating', match:true, reason:'knowledge 판단 — 도구 재호출', latencyMs:Date.now()-__tLLM0}}}));
-        try{ parsed = await callClaude(text, true); }catch(e){}
+        try{ parsed = await callClaude(text, 'heavy'); }catch(e){}
       }
       window.__tLLMms = Date.now()-__tLLM0;
       if(parsed && parsed.__parseFailed){ // Stage 3: 조용한 재시도 1회 — 사용자는 미르만 본다
-        try{ parsed = await callClaude(text, __allowTools); }catch(e){ parsed = {__parseFailed:true}; }
+        try{ parsed = await callClaude(text, __route); }catch(e){ parsed = {__parseFailed:true}; }
       }
       if(parsed && parsed.__parseFailed){ // Stage 4는 없다 — 회복 문장으로 종결. 원문 노출 절대 금지
         parsed = {reply:'잠깐, 확인하는 과정에서 문제가 있었어. 내 쪽 문제야 — 다시 확인해볼게.', remember:[], topic: state.topicHistory.slice(-1)[0]||'일상'};
