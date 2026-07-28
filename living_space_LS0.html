@@ -148,7 +148,7 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,'Apple SD Gothic
   font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
 
 /* ---------- 프로토 전용 데모 패널 (납품 시 제거) ---------- */
-#demoPanel{position:absolute;left:12px;top:calc(env(safe-area-inset-top,0px) + 12px);
+#demoPanel{position:absolute;left:12px;top:calc(var(--pa-top) + 58px);
   display:flex;flex-direction:column;gap:6px;z-index:50}
 .demoBtn{padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.12);
   background:rgba(0,0,0,.35);color:rgba(255,255,255,.6);font-size:11px;cursor:pointer;text-align:left}
@@ -232,6 +232,60 @@ html.pa-diag #paBadge{display:block}
 </div>
 
 <script>
+
+/* ====== Asset Keyer: 배경 오려내기 ======
+   PNG의 흰 배경을 '가장자리에서 이어진 픽셀만' 투명화한다.
+   몸통 내부의 흰색은 가장자리와 안 이어져 있으므로 살아남는다.
+   (v17.5 본판의 런타임 키잉을 프로토에 이식) */
+function keyOutBackground(dataUrl){
+  return new Promise(res=>{
+    const im=new Image();
+    im.onload=()=>{
+      const w=im.width,ht=im.height;
+      const cv=document.createElement('canvas');cv.width=w;cv.height=ht;
+      const cx=cv.getContext('2d');cx.drawImage(im,0,0);
+      const d=cx.getImageData(0,0,w,ht),px=d.data;
+      // 배경 기준색 = 네 모서리 평균
+      const corners=[0,(w-1)*4,(ht-1)*w*4,((ht-1)*w+w-1)*4];
+      let br=0,bg=0,bb=0;corners.forEach(i=>{br+=px[i];bg+=px[i+1];bb+=px[i+2];});
+      br/=4;bg/=4;bb/=4;
+      const TOL=46, FEATHER=26;
+      const dist=i=>Math.sqrt((px[i]-br)**2+(px[i+1]-bg)**2+(px[i+2]-bb)**2);
+      const visited=new Uint8Array(w*ht);
+      const q=[];
+      for(let x=0;x<w;x++){q.push(x);q.push((ht-1)*w+x);}
+      for(let y=0;y<ht;y++){q.push(y*w);q.push(y*w+w-1);}
+      while(q.length){
+        const idx=q.pop();
+        if(visited[idx])continue;visited[idx]=1;
+        const i=idx*4,dd=dist(i);
+        if(dd>TOL+FEATHER)continue;                 // 배경 아님 → 진입 금지
+        px[i+3]=dd<=TOL?0:Math.round(255*(dd-TOL)/FEATHER); // 경계는 부드럽게
+        const x=idx%w,y=(idx/w)|0;
+        if(x>0)q.push(idx-1);if(x<w-1)q.push(idx+1);
+        if(y>0)q.push(idx-w);if(y<ht-1)q.push(idx+w);
+      }
+      cx.putImageData(d,0,0);
+      res(cv.toDataURL('image/png'));
+    };
+    im.src=dataUrl;
+  });
+}
+(async ()=>{
+  const layers=[...document.querySelectorAll('.petLayerImg')];
+  const keyed=[];
+  for(const el of layers){
+    const k=await keyOutBackground(el.src);
+    el.src=k;keyed.push(k);
+  }
+  // 림라이트·바닥반사의 마스크도 오려낸 실루엣으로 교체
+  const rim=document.getElementById('rimLight'),bnc=document.getElementById('bounceLight');
+  [rim,bnc].forEach(el=>{
+    el.style.webkitMaskImage='url('+keyed[0]+')';
+    el.style.maskImage='url('+keyed[0]+')';
+  });
+})();
+
 /* ====== Camera: 시차(패럴랙스) — 기기 기울임/포인터로 방이 미세하게 반응 ====== */
 const world = document.getElementById('world');
 const petAnchor = document.getElementById('petAnchor');
