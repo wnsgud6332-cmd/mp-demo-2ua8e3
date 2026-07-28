@@ -233,10 +233,11 @@ html.pa-diag #paBadge{display:block}
 
 <script>
 
-/* ====== Asset Keyer: 배경 오려내기 ======
-   PNG의 흰 배경을 '가장자리에서 이어진 픽셀만' 투명화한다.
-   몸통 내부의 흰색은 가장자리와 안 이어져 있으므로 살아남는다.
-   (v17.5 본판의 런타임 키잉을 프로토에 이식) */
+/* ====== Asset Keyer v2: 알파 기반 '흰 김 걷어내기' ======
+   에셋은 원래 알파를 갖고 있다: 배경 안개(알파 30~90, 흰색) vs 몸통(알파 245+).
+   규칙: '거의 흰색이면서 반투명'인 픽셀만 알파를 깎는다.
+   몸통(불투명)·불꽃(파란색)은 조건에 안 걸리므로 절대 안 다친다.
+   (v17.3 침식 사고 재발 방지: 색+알파 이중 조건, flood-fill 사용 금지) */
 function keyOutBackground(dataUrl){
   return new Promise(res=>{
     const im=new Image();
@@ -245,25 +246,13 @@ function keyOutBackground(dataUrl){
       const cv=document.createElement('canvas');cv.width=w;cv.height=ht;
       const cx=cv.getContext('2d');cx.drawImage(im,0,0);
       const d=cx.getImageData(0,0,w,ht),px=d.data;
-      // 배경 기준색 = 네 모서리 평균
-      const corners=[0,(w-1)*4,(ht-1)*w*4,((ht-1)*w+w-1)*4];
-      let br=0,bg=0,bb=0;corners.forEach(i=>{br+=px[i];bg+=px[i+1];bb+=px[i+2];});
-      br/=4;bg/=4;bb/=4;
-      const TOL=46, FEATHER=26;
-      const dist=i=>Math.sqrt((px[i]-br)**2+(px[i+1]-bg)**2+(px[i+2]-bb)**2);
-      const visited=new Uint8Array(w*ht);
-      const q=[];
-      for(let x=0;x<w;x++){q.push(x);q.push((ht-1)*w+x);}
-      for(let y=0;y<ht;y++){q.push(y*w);q.push(y*w+w-1);}
-      while(q.length){
-        const idx=q.pop();
-        if(visited[idx])continue;visited[idx]=1;
-        const i=idx*4,dd=dist(i);
-        if(dd>TOL+FEATHER)continue;                 // 배경 아님 → 진입 금지
-        px[i+3]=dd<=TOL?0:Math.round(255*(dd-TOL)/FEATHER); // 경계는 부드럽게
-        const x=idx%w,y=(idx/w)|0;
-        if(x>0)q.push(idx-1);if(x<w-1)q.push(idx+1);
-        if(y>0)q.push(idx-w);if(y<ht-1)q.push(idx+w);
+      for(let i=0;i<px.length;i+=4){
+        const r=px[i],g=px[i+1],b=px[i+2],a=px[i+3];
+        if(a>=245) continue;                        // 몸통 핵심부 — 무조건 보존
+        const mn=Math.min(r,g,b),mx=Math.max(r,g,b);
+        const nearWhite = mn>=210 && (mx-mn)<=30;   // 흰색 계열인가
+        if(!nearWhite) continue;                    // 파란 불꽃 등 유색 반투명 — 보존
+        px[i+3] = a<=95 ? 0 : Math.round((a-95)*255/150);  // 김만 걷어냄
       }
       cx.putImageData(d,0,0);
       res(cv.toDataURL('image/png'));
@@ -271,21 +260,6 @@ function keyOutBackground(dataUrl){
     im.src=dataUrl;
   });
 }
-(async ()=>{
-  const layers=[...document.querySelectorAll('.petLayerImg')];
-  const keyed=[];
-  for(const el of layers){
-    const k=await keyOutBackground(el.src);
-    el.src=k;keyed.push(k);
-  }
-  // 림라이트·바닥반사의 마스크도 오려낸 실루엣으로 교체
-  const rim=document.getElementById('rimLight'),bnc=document.getElementById('bounceLight');
-  [rim,bnc].forEach(el=>{
-    el.style.webkitMaskImage='url('+keyed[0]+')';
-    el.style.maskImage='url('+keyed[0]+')';
-  });
-})();
-
 /* ====== Camera: 시차(패럴랙스) — 기기 기울임/포인터로 방이 미세하게 반응 ====== */
 const world = document.getElementById('world');
 const petAnchor = document.getElementById('petAnchor');
