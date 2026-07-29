@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MYAIPET LS v2.4 · Master Asset</title>
+<title>MYAIPET LS v2.6 · Adaptive</title>
 <style>
 /* ============================================================
    LS-0 v1.2 — Phase 1 Living Space > Phase 2 Conversation
@@ -106,9 +106,15 @@ html.typingNow #tailImg{animation:tailWag 1.4s ease-in-out infinite;transform-or
 /* 키보드 열림: 방은 흐려지고 대화가 주인 */
 html.pa-kb-open #petAnchor{top:40%;--pet-w:min(38vw,220px)}
 /* Platform Adapter 기기 프로파일 (v1.2 재건축 때 누락 → v2.4 복원 + desktop 신설) */
-html.pa-desktop{--pet-w:min(27vw,520px)}
-html.pa-desktop #petAnchor{top:53%}
-html.pa-tablet{--pet-w:min(36vw,380px)}
+html.pa-desktop{--pet-w:min(34vw,560px)}          /* phone 대비 +65%(카메라줌 합산 체감 +30~40%) */
+html.pa-desktop #petAnchor{top:55%}
+/* Camera Zoom: 넓은 화면에선 방으로 반걸음 다가간다 */
+html.pa-desktop #roomImg{transform:scale(1.18);object-position:50% 52%}
+/* UI 폭 재조정: 1920px 통짜 입력줄 금지 — 중앙 680px */
+html.pa-desktop #inputBar{left:50%;right:auto;transform:translateX(-50%);width:min(680px,92vw)}
+html.pa-desktop #conv{left:50%;right:auto;transform:translateX(-50%);width:min(680px,92vw)}
+html.pa-tablet #camera{perspective:1150px}
+html.pa-tablet{--pet-w:min(38vw,400px)}  /* phone 대비 +18% */
 html.pa-fold-open{--pet-w:min(30vw,340px)}
 html.pa-fold-open #camera{perspective:1300px}
 html.pa-fold-closed{--pet-w:min(62vw,300px)}
@@ -214,7 +220,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v2.4</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v2.6</div>
 <div id="paBadge"></div>
 <div id="demoPanel">
   <button class="demoBtn" id="btnMem">회상 시연</button>
@@ -398,7 +404,7 @@ const PA={device:'unknown',os:'unknown',caps:{},
     const short=Math.min(innerWidth,innerHeight),ar=innerWidth/innerHeight;
     if(this.os==='Android'&&ar>0.82&&ar<1.25&&short>=580)this.device='fold-open';
     else if(this.os==='Android'&&ar<0.48)this.device='fold-closed';
-    else if(!('ontouchstart' in window)&&matchMedia('(hover:hover)').matches)this.device='desktop';
+    else if(matchMedia('(hover:hover) and (pointer:fine)').matches)this.device='desktop';
     else if(short>=600)this.device='tablet';
     else this.device='phone';
     document.documentElement.className=document.documentElement.className
