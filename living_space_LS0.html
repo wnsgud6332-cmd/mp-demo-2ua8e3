@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MYAIPET LS v3.6.1 · Session Gov</title>
+<title>MYAIPET LS v3.7 · Birth Unified</title>
 <style>
 /* ============================================================
    LS-0 v1.2 — Phase 1 Living Space > Phase 2 Conversation
@@ -172,14 +172,22 @@ html.pa-fold-closed{--pet-w:min(62vw,300px)}
 #modeLabel{font-size:10px;color:rgba(255,255,255,.35);padding-left:2px}
 
 /* ---- Stage 3: Birth Overlay (Golden Brain 소환 창 — 재구현 0) ---- */
-#birthOverlay{position:fixed;inset:0;z-index:300;background:#0e0a14;display:none;flex-direction:column}
+#birthOverlay{position:fixed;inset:0;z-index:300;display:none;flex-direction:column;
+  background:radial-gradient(120% 90% at 50% 30%, #2b2033 0%, #1a1420 55%, #0e0a14 100%);
+  opacity:1;transition:opacity 1s ease}
 #birthOverlay.on{display:flex}
-#birthBar{padding:calc(var(--pa-top) + 10px) 14px 10px;background:rgba(30,22,40,.95);
-  color:#ffe9c8;font-size:13px;line-height:1.5;display:flex;align-items:center;gap:10px}
+#birthOverlay.doorOpen{opacity:0}
+#birthOverlay::before{content:'';position:absolute;left:50%;top:34%;width:340px;height:340px;
+  transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;z-index:0;
+  background:radial-gradient(circle, rgba(255,214,170,.22), rgba(255,214,170,.06) 55%, transparent 72%);
+  animation:gatherLight 2.6s ease-in-out infinite}
+@keyframes gatherLight{0%,100%{transform:translate(-50%,-50%) scale(.9);opacity:.7}50%{transform:translate(-50%,-50%) scale(1.08);opacity:1}}
+#birthBar{position:relative;z-index:2;padding:calc(var(--pa-top) + 12px) 16px 12px;background:transparent;
+  color:#ffe9c8;font-size:13.5px;letter-spacing:.02em;line-height:1.5;display:flex;align-items:center;gap:10px}
 #birthBar button{margin-left:auto;padding:8px 14px;border-radius:9px;border:1px solid rgba(255,217,160,.4);
   background:rgba(255,217,160,.12);color:#ffd9a0;font-size:13px}
 #birthBar button:disabled{opacity:.35}
-#birthFrame{flex:1;border:0;width:100%}
+#birthFrame{flex:1;border:0;width:100%;position:relative;z-index:1;opacity:0;transition:opacity .9s ease}
 #idDiag{position:fixed;left:70px;bottom:16px;z-index:98;font-size:9px;color:rgba(160,220,255,.55);font-family:monospace}
 #paBadge{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:6px 10px;border-radius:8px;
   font-size:10.5px;line-height:1.5;background:rgba(0,0,0,.62);color:#9fe8c0;
@@ -231,7 +239,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.6.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.7</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -608,6 +616,28 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
     const btnEnter=document.createElement('button');btnEnter.textContent='방으로 입장';btnEnter.disabled=true;
     bar.appendChild(msg);bar.appendChild(btnCancel);bar.appendChild(btnEnter);
     const fr=document.createElement('iframe');fr.id='birthFrame';fr.src='index.html';
+    msg.textContent='✨ 빛이 모이고 있어요…';
+    const THEME_CSS=''
+      +'body,#app{background:linear-gradient(#241a26,#171019) !important;}'
+      +'#header{display:none !important;}'
+      +'#naming,#voicePick{background:rgba(14,10,20,.7) !important;backdrop-filter:blur(6px);}'
+      +'#naming > div,#voicePick > div{background:rgba(34,26,32,.96) !important;'
+      +'  border:1px solid rgba(255,220,180,.16) !important;border-radius:16px !important;'
+      +'  box-shadow:0 18px 50px rgba(6,3,14,.6) !important;}'
+      +'#naming > div div,#voicePick > div div{color:#ffe9c8 !important;}'
+      +'#nameInput{background:rgba(46,34,38,.7) !important;border:1px solid rgba(255,225,190,.2) !important;'
+      +'  border-radius:12px !important;color:#fff2e4 !important;}'
+      +'#nameBtn,.vpBtn{background:rgba(255,217,160,.14) !important;border:1px solid rgba(255,217,160,.45) !important;'
+      +'  border-radius:12px !important;color:#ffd9a0 !important;}'
+      +'.vpBtn{background:rgba(255,255,255,.05) !important;color:#ffe9c8 !important;'
+      +'  border:1px solid rgba(255,255,255,.12) !important;}';
+    const injectTheme=()=>{try{
+        const doc=fr.contentDocument;if(!doc)return;
+        const st=doc.createElement('style');st.textContent=THEME_CSS;doc.head.appendChild(st);
+        idLog('테마 주입 완료 (Presentation only — Golden Brain 파일 무변경)');
+      }catch(e){idLog('테마 주입 실패: '+e);}};
+    fr.addEventListener('load',()=>{injectTheme();
+      setTimeout(()=>{fr.style.opacity='1';msg.textContent='🐣 아이의 이름을 지어주세요';},400);});
     ov.appendChild(bar);ov.appendChild(fr);document.body.appendChild(ov);
     audit('LAUNCH_SENT');audit('BIRTH_STARTED');
     let done=false;
@@ -636,7 +666,9 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
             resultPayload={identityId:'local-'+launchId,displayName:st.petName,voiceId:pickVoice(),sessionId:SESSION.id,launcherKind:'birth'};
           }catch(e){resultPayload=null;}
           audit('COMPLETE(result:identityId,displayName,voiceId)');
-          btnEnter.disabled=false;msg.textContent='✅ 탄생 완료 — 방으로 들어갈 수 있어요';clearTimeout(tmr);}
+          btnEnter.disabled=false;btnEnter.textContent='문을 열고 방으로';
+          msg.textContent='💬 '+((resultPayload&&resultPayload.displayName)||'아이')+'이(가) 처음 인사를 건네요';
+          clearTimeout(tmr);}
       }
     };
     window.addEventListener('storage',e=>{ if(e.key==='myaipet-demo-v10'||e.key==='st_voice_map'){idLog('Save 감지: '+e.key);check();} });
@@ -654,13 +686,15 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
     btnCancel.onclick=()=>{ if(btnEnter.disabled) blocked('탄생을 잠시 멈췄어요 — 준비되면 다시 시작해요',['CANCELLED(user_abort)','BIRTH_REQUIRED']);
       else {ov.remove();} };
     btnEnter.onclick=()=>{finish();
+      ov.classList.add('doorOpen');  // 조명이 밝아지고 문이 열린다 — 1초 페이드
+      setTimeout(()=>{
       IdentityAdapter.recordFreeze();audit('FREEZE_RECORDED');
       if(resultPayload&&resultPayload.displayName){
         applyIdentity({petName:resultPayload.displayName});
         window.IDENT=Object.assign(window.IDENT||{},{petName:resultPayload.displayName});
         audit('ENTER_LIVING_SPACE');idLog('입장(result 전달 — storage 재독 없음): '+resultPayload.displayName);
         ov.remove();
-      } else { audit('ENTER_LIVING_SPACE'); ov.remove(); IdentityBoot(); }};
+      } else { audit('ENTER_LIVING_SPACE'); ov.remove(); IdentityBoot(); }},950);};
   }
 };
 function applyIdentity(id){  // 입장: 렌더러에 이름 반영
