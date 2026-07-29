@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MYAIPET LS v3.4 · Stage 4 Launcher</title>
+<title>MYAIPET LS v3.5 · Platform Launcher</title>
 <style>
 /* ============================================================
    LS-0 v1.2 — Phase 1 Living Space > Phase 2 Conversation
@@ -231,7 +231,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.4</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.5</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -579,9 +579,12 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
       daysTogether:st.daysTogether,facts:st.facts||[]};
   },
   recordFreeze(){ localStorage.setItem('ls_identity_frozen','1'); idLog('Freeze 기록(1회) — Gateway 지시'); },
-  openBirth(){  // Birth Launcher Contract v1 — Web 구현체(iframe). Contract가 정본, iframe은 교체 가능 부품
-    const audit=e=>{window._auditChain=(window._auditChain||[]);window._auditChain.push(e);
-      idLog('audit: '+window._auditChain.join('→').slice(-90));};
+  openBirth(){  // Platform Launcher Contract v2 — Web 구현체(kind=birth). iframe은 교체 가능 부품
+    const launchId=Math.random().toString(16).slice(2,10);   // Correlation ID
+    let retries=0;const MAX_RETRY=2;let resultPayload=null;
+    const audit=e=>{window._auditChain=(window._auditChain||[]);
+      window._auditChain.push('['+launchId+'] '+e);
+      idLog('['+launchId+'] '+window._auditChain.map(x=>x.split('] ')[1]).join('→').slice(-80));};
     audit('GW_APPROVED');
     const ov=document.createElement('div');ov.id='birthOverlay';ov.className='on';
     const bar=document.createElement('div');bar.id='birthBar';
@@ -608,17 +611,36 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
       if(done)return;
       const v=IdentityGateway.assess();
       if(v.nextAction==='RECORD_FREEZE_ONCE'||v.nextAction==='ENTER_LIVING_SPACE'){
-        if(btnEnter.disabled){audit('BIRTH_COMPLETED');
+        if(btnEnter.disabled){
+          try{const st=JSON.parse(localStorage.getItem('myaipet-demo-v10'));
+            resultPayload={identityId:'local-'+launchId,displayName:st.petName,voiceId:pickVoice()};
+          }catch(e){resultPayload=null;}
+          audit('COMPLETE(result:identityId,displayName,voiceId)');
           btnEnter.disabled=false;msg.textContent='✅ 탄생 완료 — 방으로 들어갈 수 있어요';clearTimeout(tmr);}
       }
     };
     window.addEventListener('storage',e=>{ if(e.key==='myaipet-demo-v10'||e.key==='st_voice_map'){idLog('Save 감지: '+e.key);check();} });
     const poll=setInterval(check,2000);
-    const tmr=setTimeout(()=>{ if(!done&&btnEnter.disabled) blocked('⏳ 응답이 없어요 — 다시 시작해 주세요',['TIMEOUT','BIRTH_REQUIRED']); },180000);
-    fr.onerror=()=>{ if(!done) blocked('⚠️ 탄생 화면을 불러오지 못했어요 — 관리자 확인이 필요할 수 있어요',['ERROR','RECOVERY']); };
-    btnCancel.onclick=()=>{ if(btnEnter.disabled) blocked('탄생을 잠시 멈췄어요 — 준비되면 다시 시작해요',['CANCELLED','BIRTH_REQUIRED']);
+    let tmr;
+    const armTimer=()=>{tmr=setTimeout(()=>{
+      if(done||!btnEnter.disabled)return;
+      if(retries<MAX_RETRY){retries++;audit('TIMEOUT');audit('RETRY('+retries+')');
+        msg.textContent='⏳ 다시 시도 중… ('+retries+'/'+MAX_RETRY+')';
+        fr.src='index.html';armTimer();}
+      else blocked('⏳ 여러 번 시도했지만 응답이 없어요 — 관리자 확인이 필요해요',['TIMEOUT','ABORT']);
+    },180000);};
+    armTimer();
+    fr.onerror=()=>{ if(!done) blocked('⚠️ 탄생 화면을 불러오지 못했어요 — 관리자 확인이 필요할 수 있어요',['ERROR(LOAD_FAIL)','RECOVERY']); };
+    btnCancel.onclick=()=>{ if(btnEnter.disabled) blocked('탄생을 잠시 멈췄어요 — 준비되면 다시 시작해요',['CANCELLED(user_abort)','BIRTH_REQUIRED']);
       else {ov.remove();} };
-    btnEnter.onclick=()=>{finish();audit('FREEZE_RECORDED');audit('ENTER_LIVING_SPACE');ov.remove();IdentityBoot();};
+    btnEnter.onclick=()=>{finish();
+      IdentityAdapter.recordFreeze();audit('FREEZE_RECORDED');
+      if(resultPayload&&resultPayload.displayName){
+        applyIdentity({petName:resultPayload.displayName});
+        window.IDENT=Object.assign(window.IDENT||{},{petName:resultPayload.displayName});
+        audit('ENTER_LIVING_SPACE');idLog('입장(result 전달 — storage 재독 없음): '+resultPayload.displayName);
+        ov.remove();
+      } else { audit('ENTER_LIVING_SPACE'); ov.remove(); IdentityBoot(); }};
   }
   }
 };
