@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MYAIPET LS v2.6 · Adaptive</title>
+<title>MYAIPET LS v3.0 · EC-02 Stage 1</title>
 <style>
 /* ============================================================
    LS-0 v1.2 — Phase 1 Living Space > Phase 2 Conversation
@@ -220,7 +220,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v2.6</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.0</div>
 <div id="paBadge"></div>
 <div id="demoPanel">
   <button class="demoBtn" id="btnMem">회상 시연</button>
@@ -302,10 +302,71 @@ function bubble(kind,text){
     setTimeout(()=>{conv.innerHTML='';},900);
   },7000);
 }
+
+/* ====== EC-02 Stage 1: 두뇌·목소리 연결 ======
+   본판 v17.5 호출 규격 재사용(mp-proxy = LLM Adapter 상당). Engine Object 무접촉.
+   본판 localStorage는 읽기 전용(st_slot, st_voice_map) — 절대 쓰지 않는다. */
+const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
+const PERSONA='너는 미르야. 5살 아이 같은 따뜻한 AI 동반자. 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마.';
+const hist=[];
+let ttsOn = localStorage.getItem('ls_tts')!=='off';
+function pickVoice(){
+  try{
+    const slot=localStorage.getItem('st_slot')||'f';
+    const map=JSON.parse(localStorage.getItem('st_voice_map')||'{}');
+    return (map[slot]&&map[slot].id)||null;
+  }catch(e){return null;}
+}
+let speakGen=0,curAudio=null;
+async function speak(text){
+  if(!ttsOn)return;
+  const vid=pickVoice(); if(!vid)return;
+  const my=++speakGen;
+  if(curAudio){try{curAudio.pause();}catch(e){}}
+  for(let i=0;i<text.length;i+=295){
+    if(my!==speakGen)return;
+    try{
+      const r=await fetch(PROXY+'/v1/text-to-speech',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({voice_id:vid,text:text.slice(i,i+295),model:'ssfm-v30',language:'kor',output:{audio_format:'mp3'}})});
+      if(!r.ok)return;
+      const url=URL.createObjectURL(await r.blob());
+      if(my!==speakGen)return;
+      await new Promise(res=>{curAudio=new Audio(url);
+        curAudio.onended=()=>{URL.revokeObjectURL(url);res();};
+        curAudio.onerror=()=>{URL.revokeObjectURL(url);res();};
+        curAudio.play().catch(res);});
+    }catch(e){return;}
+  }
+}
+async function brain(userText){
+  hist.push({role:'user',content:userText});
+  while(hist.length>12)hist.shift();
+  const th=document.createElement('div');th.className='msgRow pet in';
+  const tb=document.createElement('div');tb.className='bub pet';tb.style.opacity=1;tb.textContent='…';
+  th.appendChild(tb);conv.appendChild(th);
+  document.documentElement.classList.remove('convIdle');
+  document.documentElement.classList.add('convOn');
+  try{
+    const r=await fetch(PROXY+'/v1/messages',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,system:PERSONA,messages:hist})});
+    if(!r.ok)throw new Error('http '+r.status);
+    const d=await r.json();
+    const reply=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim()||'…';
+    th.remove();
+    hist.push({role:'assistant',content:reply});
+    bubble('pet',reply);
+    speak(reply);
+  }catch(e){
+    th.remove();
+    bubble('pet','(연습 모드) 지금은 생각이 잘 안 닿아… 잠시 뒤에 다시 말 걸어줘.');
+  }
+}
 document.getElementById('sendBtn').onclick=()=>{
   const el=document.getElementById('chatInput'),v=el.value.trim();if(!v)return;el.value='';
   bubble('user',v);
-  setTimeout(()=>bubble('pet','응, 듣고 있어. (프로토 — 진짜 두뇌는 본판에)'),700);
+  brain(v);
 };
 document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('sendBtn').onclick();});
 /* 입력 중 PET 반응: 입력창을 살짝 내려다보고, 꼬리를 흔든다 */
@@ -366,7 +427,7 @@ const SP={
     <div class="memCat"><div class="mc-name">지금의 기척</div><div class="mc-recent">곁에 있음 · 평온함 · 이야기하고 싶어함</div></div>`},
   set:{title:'설정',sub:'미르와 공간을 조정해요. (LS-1에서 항목 확정)',
     html:`
-    <div class="memCat"><div class="mc-name">🔊 목소리</div><div class="mc-recent">켜짐</div></div>
+    <div class="memCat" id="ttsToggleCard" style="cursor:pointer"><div class="mc-name">🔊 목소리</div><div class="mc-recent" id="ttsState">확인 중…</div></div>
     <div class="memCat"><div class="mc-name">🌙 공간</div><div class="mc-recent">밤의 거실</div></div>
     <div class="memCat"><div class="mc-name">⚙ 고급</div><div class="mc-recent">진단 · 초기화 (본판 전용)</div></div>`}
 };
@@ -374,6 +435,13 @@ let spOpen=false;
 function openPanel(kind){
   const p=SP[kind];document.getElementById('spTitle').textContent=p.title;
   document.getElementById('spBody').innerHTML='<div class="sp-sub">'+p.sub+'</div>'+p.html;
+  if(kind==='set'){
+    const st=document.getElementById('ttsState'),card=document.getElementById('ttsToggleCard');
+    const paint=()=>{st.textContent=ttsOn?'켜짐 — 탭해서 끄기':'꺼짐 — 탭해서 켜기';};
+    paint();
+    card.onclick=()=>{ttsOn=!ttsOn;localStorage.setItem('ls_tts',ttsOn?'on':'off');paint();
+      if(!ttsOn&&curAudio){try{curAudio.pause();}catch(e){}}};
+  }
   document.getElementById('slidePanel').classList.add('on');
   document.getElementById('panelDim').classList.add('on');spOpen=true;
 }
