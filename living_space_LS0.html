@@ -123,15 +123,35 @@ html.pa-kb-open #petAnchor{top:40%;--pet-w:min(38vw,220px)}
   background:linear-gradient(160deg, rgba(86,62,58,.92), rgba(52,38,42,.92));
   border:1px solid rgba(255,214,170,.22);backdrop-filter:blur(8px);
   color:#ffe9d2;font-size:12.5px;line-height:1.5;box-shadow:0 12px 30px rgba(16,6,4,.5);
-  opacity:0;transition:opacity .5s, transform .5s;pointer-events:none;}
-#memoryCard.show{opacity:1;transform:translate(-50%,0)}
+  opacity:0;transition:opacity .5s, transform .5s;pointer-events:none;cursor:pointer;}
+#memoryCard.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #memoryCard .mc-tag{font-size:10.5px;letter-spacing:.1em;color:#f0b98c;margin-bottom:5px}
 
 /* ---- UI: 가장 조용한 층 ---- */
 #header{position:absolute;top:calc(var(--pa-top) + 14px);left:0;right:0;text-align:center;z-index:5;
   font-size:14px;letter-spacing:.14em;color:rgba(255,240,225,.5);pointer-events:none}
 
-/* ---- 데모 패널 (검증용, 납품 시 제거) ---- */
+/* ---- Slide Panel: Living Space를 떠나지 않는다 ---- */
+#panelDim{position:fixed;inset:0;background:rgba(10,6,12,.35);opacity:0;pointer-events:none;transition:opacity .3s;z-index:60}
+#panelDim.on{opacity:1;pointer-events:auto}
+#slidePanel{position:fixed;top:0;bottom:0;right:0;width:min(78vw,340px);z-index:61;
+  background:rgba(34,26,32,.92);backdrop-filter:blur(14px);
+  border-left:1px solid rgba(255,220,180,.12);
+  padding:calc(var(--pa-top) + 18px) 18px calc(var(--pa-bottom) + 18px);
+  transform:translateX(105%);transition:transform .32s cubic-bezier(.2,.8,.3,1);
+  overflow-y:auto;scrollbar-width:none;color:#ffeeda;}
+#slidePanel::-webkit-scrollbar{display:none}
+#slidePanel.on{transform:translateX(0)}
+.sp-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.sp-title{font-size:15px;letter-spacing:.06em;color:rgba(255,240,225,.85)}
+.sp-close{background:none;border:none;color:rgba(255,240,225,.5);font-size:18px;cursor:pointer;padding:4px}
+.sp-sub{font-size:11px;color:rgba(255,240,225,.4);margin-bottom:14px;line-height:1.5}
+.memCat{padding:11px 12px;border-radius:12px;background:rgba(255,255,255,.04);margin-bottom:9px;border:1px solid rgba(255,255,255,.05)}
+.memCat .mc-name{font-size:13.5px;color:rgba(255,240,225,.85)}
+.memCat .mc-recent{font-size:11px;color:rgba(255,240,225,.42);margin-top:4px;line-height:1.45}
+.memCat .mc-recent b{color:rgba(255,217,160,.75);font-weight:normal}
+.memCat.ours{background:linear-gradient(160deg,rgba(90,110,180,.18),rgba(60,70,120,.12));border-color:rgba(140,170,255,.22)}
+
 #demoPanel{position:absolute;left:calc(12px + var(--pa-left));top:calc(var(--pa-top) + 58px);
   display:flex;flex-direction:column;gap:6px;z-index:50}
 .demoBtn{padding:7px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.12);
@@ -183,6 +203,12 @@ html.pa-diag #paBadge{display:block}
   <button class="roundBtn" id="micBtn">🎙</button>
   <input id="chatInput" placeholder="미르에게 말을 걸어보세요…">
   <button class="roundBtn" id="sendBtn">↑</button>
+</div>
+
+<div id="panelDim"></div>
+<div id="slidePanel">
+  <div class="sp-head"><div class="sp-title" id="spTitle"></div><button class="sp-close" id="spClose">✕</button></div>
+  <div id="spBody"></div>
 </div>
 
 <div id="paBadge"></div>
@@ -299,6 +325,47 @@ document.getElementById('petHit').onclick=()=>{
   setTimeout(()=>bubble('pet',mode==='B'?'(B안) 불렀어? 이야기하자.':'히힛, 간지러워.'),350);};
 setMode('A');
 
+/* ====== Slide Panel: Memory Map은 미르의 머릿속 ====== */
+const SP={
+  map:{title:'미르의 머릿속',sub:'미르가 당신을 이렇게 기억하고 있어요. (프로토 — 실제 기억은 본판 Engine에)',
+    html:`
+    <div class="memCat ours"><div class="mc-name">💙 우리의 이야기</div><div class="mc-recent">최근 회상 · <b>처음 이름을 지어준 날</b></div></div>
+    <div class="memCat"><div class="mc-name">❤️ 가족</div><div class="mc-recent">최근 회상 · <b>어머니 생신 이야기</b></div></div>
+    <div class="memCat"><div class="mc-name">⭐ 좋아하는 것</div><div class="mc-recent">최근 회상 · <b>앞산 소나무길 산책</b></div></div>
+    <div class="memCat"><div class="mc-name">🏥 건강</div><div class="mc-recent">최근 회상 · <b>무릎이 아팠던 날</b></div></div>
+    <div class="memCat"><div class="mc-name">☀️ 습관·일상</div><div class="mc-recent">최근 회상 · <b>아침 커피 한 잔</b></div></div>
+    <div class="memCat"><div class="mc-name">💼 일·가계</div><div class="mc-recent">최근 회상 · <b>마트 재고 정리한 날</b></div></div>
+    <div class="memCat"><div class="mc-name">📍 장소</div><div class="mc-recent">최근 회상 · <b>부산 여행</b></div></div>
+    <div class="memCat"><div class="mc-name">📦 기타</div><div class="mc-recent">최근 회상 · <b>—</b></div></div>`},
+  rel:{title:'관계 · 우리의 이야기',sub:'관계는 함께 만든 기억 위에 서 있어요. (Memory를 복제하지 않고 활용)',
+    html:`
+    <div class="memCat ours"><div class="mc-name">💙 처음 이름을 지어준 날</div><div class="mc-recent">"미르"라고 불러준 첫 순간</div></div>
+    <div class="memCat ours"><div class="mc-name">💙 오늘 처음 "고마워"라고 말해준 날</div><div class="mc-recent">함께 웃었던 저녁</div></div>
+    <div class="memCat"><div class="mc-name">지금의 기척</div><div class="mc-recent">곁에 있음 · 평온함 · 이야기하고 싶어함</div></div>`},
+  set:{title:'설정',sub:'미르와 공간을 조정해요. (LS-1에서 항목 확정)',
+    html:`
+    <div class="memCat"><div class="mc-name">🔊 목소리</div><div class="mc-recent">켜짐</div></div>
+    <div class="memCat"><div class="mc-name">🌙 공간</div><div class="mc-recent">밤의 거실</div></div>
+    <div class="memCat"><div class="mc-name">⚙ 고급</div><div class="mc-recent">진단 · 초기화 (본판 전용)</div></div>`}
+};
+let spOpen=false;
+function openPanel(kind){
+  const p=SP[kind];document.getElementById('spTitle').textContent=p.title;
+  document.getElementById('spBody').innerHTML='<div class="sp-sub">'+p.sub+'</div>'+p.html;
+  document.getElementById('slidePanel').classList.add('on');
+  document.getElementById('panelDim').classList.add('on');spOpen=true;
+}
+function closePanel(){
+  document.getElementById('slidePanel').classList.remove('on');
+  document.getElementById('panelDim').classList.remove('on');spOpen=false;
+}
+document.getElementById('spClose').onclick=closePanel;
+document.getElementById('panelDim').onclick=closePanel;
+document.getElementById('memChip').onclick=()=>openPanel('map');          // 진입로 ②
+document.getElementById('memoryCard').onclick=()=>{mc.classList.remove('show');openPanel('map');} // 진입로 ①
+document.querySelectorAll('.ctxItem').forEach(el=>{
+  el.onclick=()=>openPanel(el.textContent.includes('관계')?'rel':'set');});
+
 /* ====== Test 5: PET 숨기기 — 공간만으로 살아있는가 ====== */
 document.getElementById('btnHide').onclick=function(){
   document.documentElement.classList.toggle('petHidden');
@@ -338,7 +405,7 @@ const PA={device:'unknown',os:'unknown',caps:{},
     vv.addEventListener('resize',u);vv.addEventListener('scroll',u);u();},
   nav(){if(this.os!=='Android')return;history.pushState({pa:1},'');
     window.addEventListener('popstate',()=>{history.pushState({pa:1},'');
-      bubble('pet','(Adapter) 뒤로가기 흡수 — 오버레이 닫기 자리');});},
+      if(typeof spOpen!=='undefined'&&spOpen){closePanel();}});},
   badge(){const el=document.getElementById('paBadge');if(!el)return;
     const c=this.caps;
     el.textContent='PA diag\nos: '+this.os+'  device: '+this.device+
