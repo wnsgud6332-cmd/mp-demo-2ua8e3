@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MYAIPET LS v3.6 · Session Gov</title>
+<title>MYAIPET LS v3.6.1 · Session Gov</title>
 <style>
 /* ============================================================
    LS-0 v1.2 — Phase 1 Living Space > Phase 2 Conversation
@@ -231,7 +231,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.6</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.6.1</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -661,7 +661,6 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
         audit('ENTER_LIVING_SPACE');idLog('입장(result 전달 — storage 재독 없음): '+resultPayload.displayName);
         ov.remove();
       } else { audit('ENTER_LIVING_SPACE'); ov.remove(); IdentityBoot(); }};
-  }
   }
 };
 function applyIdentity(id){  // 입장: 렌더러에 이름 반영
