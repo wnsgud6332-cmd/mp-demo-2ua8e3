@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MYAIPET LS v3.1 · EC-02 Stage 1</title>
+<title>MYAIPET LS v3.2 · EC-02 Stage 1</title>
 <style>
 /* ============================================================
    LS-0 v1.2 — Phase 1 Living Space > Phase 2 Conversation
@@ -220,7 +220,8 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.2</div>
+<div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
 <div id="demoPanel">
   <button class="demoBtn" id="btnMem">회상 시연</button>
@@ -317,28 +318,41 @@ function pickVoice(){
     return (map[slot]&&map[slot].id)||'tc_6699eb5749dfac016c29445c'; // 폴백: Sua (본판 확정 캐스트 규약 상수)
   }catch(e){return 'tc_6699eb5749dfac016c29445c';}
 }
-let speakGen=0,curAudio=null;
+let speakGen=0,curAudio=null,pendingUrl=null;
+const vDiag=t=>{const el=document.getElementById('voiceDiag');if(el)el.textContent='voice: '+t;};
 async function speak(text){
-  if(!ttsOn)return;
-  const vid=pickVoice(); if(!vid)return;
+  if(!ttsOn){vDiag('off');return;}
+  const vid=pickVoice(); if(!vid){vDiag('no-voice-id');return;}
   const my=++speakGen;
   if(curAudio){try{curAudio.pause();}catch(e){}}
   for(let i=0;i<text.length;i+=295){
     if(my!==speakGen)return;
     try{
+      vDiag('요청중 '+vid.slice(0,10)+'…');
       const r=await fetch(PROXY+'/v1/text-to-speech',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({voice_id:vid,text:text.slice(i,i+295),model:'ssfm-v30',language:'kor',output:{audio_format:'mp3'}})});
-      if(!r.ok)return;
-      const url=URL.createObjectURL(await r.blob());
+      if(!r.ok){vDiag('HTTP '+r.status);return;}
+      const blob=await r.blob();
+      vDiag('수신 '+blob.size+'B');
+      const url=URL.createObjectURL(blob);
       if(my!==speakGen)return;
       await new Promise(res=>{curAudio=new Audio(url);
-        curAudio.onended=()=>{URL.revokeObjectURL(url);res();};
-        curAudio.onerror=()=>{URL.revokeObjectURL(url);res();};
-        curAudio.play().catch(res);});
-    }catch(e){return;}
+        curAudio.onended=()=>{URL.revokeObjectURL(url);vDiag('재생완료');res();};
+        curAudio.onerror=()=>{URL.revokeObjectURL(url);vDiag('audio-err');res();};
+        curAudio.play().then(()=>vDiag('재생중')).catch(err=>{
+          vDiag('차단됨('+err.name+') — 화면 탭하면 재생');
+          pendingUrl=url;res();});
+      });
+    }catch(e){vDiag('fetch-err '+String(e).slice(0,30));return;}
   }
 }
+/* 자동재생 차단 해제: 다음 터치/클릭에서 보류 오디오 재생 */
+window.addEventListener('pointerdown',()=>{
+  if(pendingUrl){const u=pendingUrl;pendingUrl=null;
+    curAudio=new Audio(u);
+    curAudio.play().then(()=>vDiag('재생중(해제됨)')).catch(e=>vDiag('재시도실패 '+e.name));}
+},true);
 async function brain(userText){
   hist.push({role:'user',content:userText});
   while(hist.length>12)hist.shift();
