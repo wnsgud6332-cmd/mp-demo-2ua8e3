@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MYAIPET LS v3.5 · Platform Launcher</title>
+<title>MYAIPET LS v3.6 · Session Gov</title>
 <style>
 /* ============================================================
    LS-0 v1.2 — Phase 1 Living Space > Phase 2 Conversation
@@ -231,7 +231,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.5</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.6</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -558,6 +558,20 @@ PA.init();
 const idLog=t=>{const el=document.getElementById('idDiag');if(el)el.textContent='identity: '+t;
   try{console.log('[Identity]',t);}catch(e){}};
 
+
+/* ====== Stage 6: Session Governance — 관찰·기록만, Identity·Engine 무변경 ====== */
+window._auditLog=[];  // 구조체 정본 {id,time,sessionId,launchId,type,payload}
+const SESSION={id:Math.random().toString(16).slice(2,10)};
+function auditObj(type,payload,launchId){
+  window._auditLog.push({id:Math.random().toString(16).slice(2,10),time:Date.now(),
+    sessionId:SESSION.id,launchId:launchId||null,type:type,payload:payload||null});
+}
+auditObj('SESSION_START');
+document.addEventListener('visibilitychange',()=>{
+  auditObj(document.hidden?'SESSION_PAUSE':'SESSION_RESUME');});
+window.addEventListener('pagehide',()=>auditObj('SESSION_END'));
+window.addEventListener('error',ev=>auditObj('SESSION_CRASH',{error:String(ev.message||'').slice(0,120)}));
+
 const IdentityGateway={  // WO-IMPL-001 (참조 구현 v1.0과 동일 판정)
   assess(){
     const raw=localStorage.getItem('myaipet-demo-v10');
@@ -584,6 +598,7 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
     let retries=0;const MAX_RETRY=2;let resultPayload=null;
     const audit=e=>{window._auditChain=(window._auditChain||[]);
       window._auditChain.push('['+launchId+'] '+e);
+      auditObj(e.split('(')[0],null,launchId);  // 구조체 정본 병행
       idLog('['+launchId+'] '+window._auditChain.map(x=>x.split('] ')[1]).join('→').slice(-80));};
     audit('GW_APPROVED');
     const ov=document.createElement('div');ov.id='birthOverlay';ov.className='on';
@@ -603,7 +618,12 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
       box.style.cssText='margin:auto;text-align:center;color:#ffe9c8;font-size:14px;line-height:1.8;padding:24px';
       const rb=document.createElement('button');rb.textContent='탄생 다시 시작';
       rb.style.cssText='margin-top:14px;padding:10px 18px;border-radius:10px;border:1px solid rgba(255,217,160,.4);background:rgba(255,217,160,.12);color:#ffd9a0;font-size:14px';
-      rb.onclick=()=>{ov.remove();IdentityBoot();};
+      if(auditTail.indexOf('ABORT')>-1){  // Circuit Breaker: Abort → Cooldown 60s → Allow Retry
+        rb.disabled=true;let cd=60;rb.textContent='냉각 중… '+cd+'s';
+        const iv=setInterval(()=>{cd--;rb.textContent=cd>0?('냉각 중… '+cd+'s'):'탄생 다시 시작';
+          if(cd<=0){clearInterval(iv);rb.disabled=false;auditObj('BREAKER_HALF_OPEN');}},1000);
+      }
+      rb.onclick=()=>{if(rb.disabled)return;ov.remove();IdentityBoot();};
       box.innerHTML=title;box.appendChild(document.createElement('br'));box.appendChild(rb);
       ov.appendChild(box);
     };
@@ -613,7 +633,7 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
       if(v.nextAction==='RECORD_FREEZE_ONCE'||v.nextAction==='ENTER_LIVING_SPACE'){
         if(btnEnter.disabled){
           try{const st=JSON.parse(localStorage.getItem('myaipet-demo-v10'));
-            resultPayload={identityId:'local-'+launchId,displayName:st.petName,voiceId:pickVoice()};
+            resultPayload={identityId:'local-'+launchId,displayName:st.petName,voiceId:pickVoice(),sessionId:SESSION.id,launcherKind:'birth'};
           }catch(e){resultPayload=null;}
           audit('COMPLETE(result:identityId,displayName,voiceId)');
           btnEnter.disabled=false;msg.textContent='✅ 탄생 완료 — 방으로 들어갈 수 있어요';clearTimeout(tmr);}
