@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>MYAIPET LS v3.2 · EC-02 Stage 1</title>
+<title>MYAIPET LS v3.3 · EC-02 Stage 3</title>
 <style>
 /* ============================================================
    LS-0 v1.2 — Phase 1 Living Space > Phase 2 Conversation
@@ -170,6 +170,17 @@ html.pa-fold-closed{--pet-w:min(62vw,300px)}
   background:rgba(0,0,0,.35);color:rgba(255,255,255,.6);font-size:11px;cursor:pointer;text-align:left}
 .demoBtn.on{color:#ffd9a0;border-color:rgba(255,217,160,.4)}
 #modeLabel{font-size:10px;color:rgba(255,255,255,.35);padding-left:2px}
+
+/* ---- Stage 3: Birth Overlay (Golden Brain 소환 창 — 재구현 0) ---- */
+#birthOverlay{position:fixed;inset:0;z-index:300;background:#0e0a14;display:none;flex-direction:column}
+#birthOverlay.on{display:flex}
+#birthBar{padding:calc(var(--pa-top) + 10px) 14px 10px;background:rgba(30,22,40,.95);
+  color:#ffe9c8;font-size:13px;line-height:1.5;display:flex;align-items:center;gap:10px}
+#birthBar button{margin-left:auto;padding:8px 14px;border-radius:9px;border:1px solid rgba(255,217,160,.4);
+  background:rgba(255,217,160,.12);color:#ffd9a0;font-size:13px}
+#birthBar button:disabled{opacity:.35}
+#birthFrame{flex:1;border:0;width:100%}
+#idDiag{position:fixed;left:70px;bottom:16px;z-index:98;font-size:9px;color:rgba(160,220,255,.55);font-family:monospace}
 #paBadge{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:6px 10px;border-radius:8px;
   font-size:10.5px;line-height:1.5;background:rgba(0,0,0,.62);color:#9fe8c0;
   border:1px solid rgba(159,232,192,.3);font-family:ui-monospace,monospace;white-space:pre;}
@@ -220,7 +231,8 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.2</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.3</div>
+<div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
 <div id="demoPanel">
@@ -308,7 +320,7 @@ function bubble(kind,text){
    본판 v17.5 호출 규격 재사용(mp-proxy = LLM Adapter 상당). Engine Object 무접촉.
    본판 localStorage는 읽기 전용(st_slot, st_voice_map) — 절대 쓰지 않는다. */
 const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
-const PERSONA='너는 미르야. 5살 아이 같은 따뜻한 AI 동반자. 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마.';
+const personaFor=n=>'너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마.';
 const hist=[];
 let ttsOn = localStorage.getItem('ls_tts')!=='off';
 function pickVoice(){
@@ -364,7 +376,7 @@ async function brain(userText){
   try{
     const r=await fetch(PROXY+'/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,system:PERSONA,messages:hist})});
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,system:personaFor((window.IDENT&&window.IDENT.petName)||'미르'),messages:hist})});
     if(!r.ok)throw new Error('http '+r.status);
     const d=await r.json();
     const reply=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim()||'…';
@@ -541,6 +553,70 @@ document.getElementById('btnFxIso').onclick=function(){
   im.style.cssText='max-width:96%;max-height:96%';
   iso.appendChild(im);document.body.appendChild(iso);this.classList.add('on');};
 PA.init();
+/* ============ EC-02 Stage 3: Identity Gateway·Adapter 실장 ============
+   Gateway=판정만 / Adapter=Golden Brain 신경 호출만 / 새 API 0 / Golden Brain 수정 0 */
+const idLog=t=>{const el=document.getElementById('idDiag');if(el)el.textContent='identity: '+t;
+  try{console.log('[Identity]',t);}catch(e){}};
+
+const IdentityGateway={  // WO-IMPL-001 (참조 구현 v1.0과 동일 판정)
+  assess(){
+    const raw=localStorage.getItem('myaipet-demo-v10');
+    const frozen=localStorage.getItem('ls_identity_frozen')==='1';
+    if(raw==null)return{state:'No Identity',nextAction:'BIRTH_REQUIRED'};
+    let st;try{st=JSON.parse(raw);}catch(e){return{state:'Recovery',nextAction:'ADMIN_INTERVENTION'};}
+    if(st.__schema&&st.__schema!=='myaipet-demo-v10')return{state:'Migration',nextAction:'MIGRATION_CONTRACT'};
+    if(!st.petName||!String(st.petName).trim())return{state:'Birth Required',nextAction:'RUN_GOLDEN_BRAIN_BIRTH'};
+    if(!frozen)return{state:'Birth Completed',nextAction:'RECORD_FREEZE_ONCE'};
+    if(!Array.isArray(st.facts)||!Array.isArray(st.history))return{state:'Recovery',nextAction:'ADMIN_INTERVENTION'};
+    return{state:'Identity Frozen',nextAction:'ENTER_LIVING_SPACE'};
+  }
+};
+const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
+  load(){  // loadState 규약의 필드를 읽기 전용으로
+    const st=JSON.parse(localStorage.getItem('myaipet-demo-v10'));
+    idLog('Load 수행(loadState 규약): petName='+st.petName+' · facts='+(st.facts||[]).length+' · history='+(st.history||[]).length);
+    return{petName:st.petName,userName:st.userName,intimacy:st.intimacy,trust:st.trust,
+      daysTogether:st.daysTogether,facts:st.facts||[]};
+  },
+  recordFreeze(){ localStorage.setItem('ls_identity_frozen','1'); idLog('Freeze 기록(1회) — Gateway 지시'); },
+  openBirth(){  // WO-IMPL-003: Golden Brain Birth "호출" = 원본 페이지 소환 (수정 0)
+    idLog('Birth 소환 — Golden Brain 원본 실행');
+    const ov=document.createElement('div');ov.id='birthOverlay';ov.className='on';
+    const bar=document.createElement('div');bar.id='birthBar';
+    bar.innerHTML='<span>🐣 탄생 의식 — 아이의 이름을 짓고 목소리를 골라주세요</span>';
+    const btn=document.createElement('button');btn.textContent='방으로 입장';btn.disabled=true;
+    bar.appendChild(btn);
+    const fr=document.createElement('iframe');fr.id='birthFrame';fr.src='index.html';
+    ov.appendChild(bar);ov.appendChild(fr);document.body.appendChild(ov);
+    const check=()=>{
+      const v=IdentityGateway.assess();
+      if(v.nextAction==='RECORD_FREEZE_ONCE'||v.nextAction==='ENTER_LIVING_SPACE'){
+        btn.disabled=false;bar.firstChild.textContent='✅ 탄생 완료 — 방으로 들어갈 수 있어요';
+      }
+    };
+    window.addEventListener('storage',e=>{ if(e.key==='myaipet-demo-v10'||e.key==='st_voice_map'){idLog('Save 감지(saveState/applyVoiceChoice 규약): '+e.key);check();} });
+    const poll=setInterval(check,2000);  // storage 이벤트 미발화 환경 폴백
+    btn.onclick=()=>{clearInterval(poll);ov.remove();IdentityBoot();};
+  }
+};
+function applyIdentity(id){  // 입장: 렌더러에 이름 반영
+  window.IDENT=id;
+  const hd=document.getElementById('header');if(hd&&id.petName)hd.textContent=id.petName;
+  const ci=document.getElementById('chatInput');if(ci&&id.petName)ci.placeholder=id.petName+'에게 말을 걸어보세요…';
+}
+function IdentityBoot(){  // 부팅 분기 (WO-IMPL-003/004/005/006)
+  const v=IdentityGateway.assess();
+  idLog('Gateway 판정: '+v.state+' → '+v.nextAction);
+  switch(v.nextAction){
+    case 'ENTER_LIVING_SPACE': applyIdentity(IdentityAdapter.load()); idLog('입장: Existing User'); break;
+    case 'RECORD_FREEZE_ONCE': IdentityAdapter.recordFreeze(); IdentityBoot(); break;
+    case 'BIRTH_REQUIRED': case 'RUN_GOLDEN_BRAIN_BIRTH': IdentityAdapter.openBirth(); break;
+    case 'MIGRATION_CONTRACT': idLog('Migration Contract stub — Engine 미구현(계획대로, WO-IMPL-006)'); break;
+    case 'ADMIN_INTERVENTION': idLog('Recovery — 자동 복구 금지, Admin 개입 필요'); break;
+  }
+}
+IdentityBoot();
+
 document.getElementById('btnPA').onclick=()=>{
   document.documentElement.classList.toggle('pa-diag');PA.badge();};
 </script>
