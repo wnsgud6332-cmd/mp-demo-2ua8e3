@@ -1,0 +1,94 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Search Audit Probe v1.0</title>
+<style>
+body{margin:0;font-family:-apple-system,'Noto Sans KR',sans-serif;background:#14101a;color:#ffeeda;padding:14px}
+h1{font-size:16px;margin:4px 0 2px}small{opacity:.6}
+button{border:none;border-radius:10px;padding:12px 14px;font-weight:800;font-size:14px;margin:6px 6px 6px 0;cursor:pointer}
+#runLS{background:#e9b98a;color:#241a26}#runGB{background:#8ab6e9;color:#101826}#stopBtn{background:#5a4550;color:#ffd}
+#prog{font-size:12px;margin:8px 0;color:#ffd9a8;font-family:monospace;white-space:pre-wrap}
+table{border-collapse:collapse;width:100%;font-size:11px;margin-top:8px}
+td,th{border:1px solid rgba(255,220,180,.25);padding:4px 5px;text-align:left;vertical-align:top}
+th{background:rgba(255,220,180,.12)}
+#sum{font-size:12px;margin-top:10px;white-space:pre-wrap;font-family:monospace;color:#c9f0c9}
+textarea{width:100%;height:120px;margin-top:8px;background:#0d0a12;color:#ffeeda;border:1px solid rgba(255,220,180,.3);border-radius:8px;font-size:11px}
+.fail{color:#ff9a9a}.ok{color:#a8e6a8}
+#ver{position:fixed;right:8px;bottom:6px;font-size:9px;opacity:.4;font-family:monospace}
+</style></head><body>
+<h1>Search Audit Probe <small>WO-SRCH-000 계측기 · 제품 무변경</small></h1>
+<div><button id="runLS">① 제품 경로 21회 실측</button><button id="runGB">② GB 검색 경로 7회 실측</button><button id="stopBtn">중지</button></div>
+<div id="prog">대기 중 — 버튼을 누르면 순차 실행됩니다 (약 1~3분)</div>
+<div id="tblWrap"></div><div id="sum"></div>
+<div>결과 텍스트(전체 선택 → 복사 → Claude에게 붙여넣기):</div>
+<textarea id="out" readonly></textarea>
+<div id="ver">PROBE v1.0</div>
+<script>
+const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
+const personaFor=n=>'너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마.';
+const GB_SYS='너는 미르야. 따뜻한 AI 동반자. 날씨·뉴스·시간·정보 질문이 오면 web_search로 찾아서 답하되 동반자의 말로 재구성하고 관계를 잇는 한 문장을 붙인다. 반말로 짧게.';
+const CATS=[['날씨',['대구 날씨 어때?','서울 내일 비 와?','부산 지금 기온 몇 도야?']],
+['뉴스',['오늘 주요 뉴스 알려줘','요즘 큰 뉴스 뭐 있어?','오늘 스포츠 뉴스 하나만']],
+['환율',['달러 환율 얼마야?','엔화 환율 알려줘','유로 환율 지금 얼마야?']],
+['주가',['삼성전자 주가 얼마야?','코스피 지금 몇이야?','애플 주가 알려줘']],
+['맛집',['대구 근처 맛집 추천해줘','수성구 국수 맛집 알려줘','동성로 카페 추천해줘']],
+['병원',['대구 일요일에 하는 약국 알려줘','수성구 정형외과 추천해줘','지금 문 연 소아과 있어?']],
+['지도',['동대구역에서 수성못 어떻게 가?','대구공항 가는 버스 알려줘','반월당역 몇 호선이야?']]];
+const REFUSE=/(알 수 없|확인할 수 없|실시간|제공할 수 없|죄송|어려워|모르)/;
+let rows=[],stop=false;
+const prog=t=>document.getElementById('prog').textContent=t;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function render(){
+  let h='<table><tr><th>#</th><th>경로</th><th>분류</th><th>질문</th><th>ms</th><th>in/out tk</th><th>stop</th><th>검색</th><th>판정</th><th>응답(앞 60자)</th></tr>';
+  rows.forEach((r,i)=>{h+='<tr><td>'+(i+1)+'</td><td>'+r.path+'</td><td>'+r.cat+'</td><td>'+r.q+'</td><td>'+r.ms+'</td><td>'+r.tin+'/'+r.tout+'</td><td>'+r.stopr+'</td><td>'+r.srch+'</td><td class="'+(r.judge==='정보 획득'?'ok':'fail')+'">'+r.judge+'</td><td>'+r.rep.replace(/</g,'&lt;')+'</td></tr>';});
+  document.getElementById('tblWrap').innerHTML=h+'</table>';
+  const t=rows.map((r,i)=>[i+1,r.path,r.cat,r.q,r.ms,r.tin,r.tout,r.stopr,r.srch,r.judge,r.rep].join(' | ')).join('\n');
+  let sum='';
+  ['LS','GB'].forEach(p=>{
+    const R=rows.filter(r=>r.path===p);if(!R.length)return;
+    const ok=R.filter(r=>r.judge==='정보 획득').length;
+    const ms=R.map(r=>r.ms).filter(x=>x>0);
+    const tk=R.map(r=>r.tin+r.tout);
+    sum+='['+p+'] n='+R.length+' · 정보획득 '+ok+'/'+R.length+' ('+Math.round(ok/R.length*100)+'%) · 평균 '+Math.round(ms.reduce((a,b)=>a+b,0)/ms.length)+'ms · 최대 '+Math.max.apply(null,ms)+'ms · 평균토큰 '+Math.round(tk.reduce((a,b)=>a+b,0)/tk.length)+'\n';
+    CATS.forEach(c=>{const CR=R.filter(r=>r.cat===c[0]);if(!CR.length)return;
+      const co=CR.filter(r=>r.judge==='정보 획득').length;
+      sum+='   '+c[0]+': '+co+'/'+CR.length+'\n';});
+  });
+  document.getElementById('sum').textContent=sum;
+  document.getElementById('out').value='=== Search Audit Probe v1.0 결과 ===\n'+sum+'\n#|경로|분류|질문|ms|in|out|stop|검색|판정|응답\n'+t;
+}
+async function callOnce(path,cat,q){
+  const t0=performance.now();
+  let body;
+  if(path==='LS'){body={model:'claude-sonnet-4-6',max_tokens:300,system:personaFor('미르'),messages:[{role:'user',content:q}]};}
+  else{body={model:'claude-sonnet-4-6',max_tokens:700,system:GB_SYS,messages:[{role:'user',content:q}],tools:[{type:'web_search_20250305',name:'web_search',max_uses:2}]};}
+  let msgs=body.messages.slice(),tin=0,tout=0,stopr='',srch=0,rep='',hops=0,ok=true;
+  try{
+    for(let hop=0;hop<4;hop++){hops++;
+      const r=await fetch(PROXY+'/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({},body,{messages:msgs}))});
+      if(!r.ok){rep='HTTP '+r.status;ok=false;break;}
+      const d=await r.json();
+      if(d.usage){tin+=d.usage.input_tokens||0;tout+=d.usage.output_tokens||0;}
+      stopr=d.stop_reason||'';
+      (d.content||[]).forEach(b=>{if(b.type==='server_tool_use')srch++;if(b.type==='text')rep+=b.text;});
+      if(d.stop_reason!=='pause_turn')break;
+      msgs=msgs.concat([{role:'assistant',content:d.content}]);
+    }
+  }catch(e){rep='ERR '+String(e).slice(0,40);ok=false;}
+  const ms=Math.round(performance.now()-t0);
+  const judge=(!ok)?'호출 실패':(REFUSE.test(rep)?'정보 없음':'정보 획득');
+  rows.push({path:path,cat:cat,q:q,ms:ms,tin:tin,tout:tout,stopr:stopr,srch:srch,judge:judge,rep:rep.slice(0,60),hops:hops});
+  render();
+}
+async function run(path,perCat){
+  stop=false;rows=rows.filter(r=>r.path!==path);let n=0,tot=0;
+  CATS.forEach(c=>tot+=Math.min(perCat,c[1].length));
+  for(const c of CATS){for(let i=0;i<Math.min(perCat,c[1].length);i++){
+    if(stop){prog('중지됨');return;}
+    n++;prog('['+path+'] '+n+'/'+tot+' 실행 중: '+c[1][i]);
+    await callOnce(path,c[0],c[1][i]);await sleep(900);}}
+  prog('['+path+'] 완료 — 아래 결과 텍스트를 복사해 회신');
+}
+document.getElementById('runLS').onclick=()=>run('LS',3);
+document.getElementById('runGB').onclick=()=>run('GB',1);
+document.getElementById('stopBtn').onclick=()=>{stop=true;};
+</script></body></html>
