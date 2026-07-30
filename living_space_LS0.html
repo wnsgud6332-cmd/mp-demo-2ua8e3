@@ -229,6 +229,7 @@ html.doorPush #camera{transform:scale(1.05)}
 #petSpeech::after{content:'';position:absolute;left:50%;top:100%;transform:translateX(-50%);
   border:8px solid transparent;border-top-color:rgba(32,23,36,.9)}
 #idDiag{position:fixed;left:70px;bottom:16px;z-index:98;font-size:9px;color:rgba(160,220,255,.55);font-family:monospace}
+#conv .msgRow.fade{opacity:0 !important;transform:translateY(8px) !important;transition:opacity .65s ease, transform .65s ease}
 #traceDiag{position:fixed;right:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(180,255,200,.55);font-family:monospace;max-width:58vw;overflow:hidden;white-space:nowrap}
 #paBadge{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:6px 10px;border-radius:8px;
   font-size:10.5px;line-height:1.5;background:rgba(0,0,0,.62);color:#9fe8c0;
@@ -283,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.2.3</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.3</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -343,10 +344,23 @@ for(let i=0;i<12;i++){const m=document.createElement('div');m.className='mote';
   m.style.setProperty('--dx',(Math.random()*60-20)+'px');m.style.setProperty('--dy',(30+Math.random()*80)+'px');
   m.style.animationDuration=(9+Math.random()*10)+'s';m.style.animationDelay=(-Math.random()*12)+'s';amb.appendChild(m);}
 
-/* ====== Conversation Layer: 공간의 층. 대화 끝나면 PET가 다시 중심 ====== */
-const conv=document.getElementById('conv');let idleT=null;
+/* ====== Conversation Lifecycle v1.0 (WO-UX-005) ======
+   Bubble = 대화의 생명주기 인터페이스. 삭제 기준: Context > Speech > Timer.
+   상태기계: Created→Waiting→Speaking→Holding→FadeOut→Destroyed. 말풍선별 독립 타이머. */
+const conv=document.getElementById('conv');
 function stampNow(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
-function bubble(kind,text){
+const BL={pendingUsers:[],ttsWaiters:[],
+  readMs(t){return Math.min(45000, 8000 + String(t||'').length*150);},
+  setState(row,st){row.dataset.state=st;},
+  destroy(row){if(!row||row.dataset.state==='fadeout'||row.dataset.state==='destroyed')return;
+    this.setState(row,'fadeout');row.classList.add('fade');
+    setTimeout(()=>{this.setState(row,'destroyed');try{row.remove();}catch(e){}
+      if(!conv.children.length){document.documentElement.classList.add('convIdle');
+        document.documentElement.classList.remove('convOn');}},700);},
+  onTtsDone(){const ws=this.ttsWaiters.slice();this.ttsWaiters=[];ws.forEach(f=>{try{f();}catch(e){}});}};
+document.addEventListener('sa-tts-done',()=>BL.onTtsDone());
+function bubble(kind,text,opt){
+  opt=opt||{};
   document.documentElement.classList.remove('convIdle');
   document.documentElement.classList.add('convOn');
   const row=document.createElement('div');row.className='msgRow '+kind;
@@ -359,19 +373,52 @@ function bubble(kind,text){
     row.appendChild(av);row.appendChild(b);row.appendChild(t);
   }else{row.appendChild(t);row.appendChild(b);}
   conv.appendChild(row);requestAnimationFrame(()=>row.classList.add('in'));
-  while(conv.children.length>6)conv.removeChild(conv.firstChild);
+  while(conv.children.length>8)BL.destroy(conv.firstChild);
   conv.scrollTop=conv.scrollHeight;
-  clearTimeout(idleT);
-  /* v4.2.2: 읽기 시간 비례 페이드 — 긴 답변(검색 결과)이 읽기 전에 사라지지 않게.
-     기본 7초 + 글자당 60ms, 상한 30초. 새 말풍선이 오면 타이머 재시작(기존 동작 유지) */
-  const readMs=Math.min(45000, 7000 + String(text||'').length*150);
-  idleT=setTimeout(()=>{ // 대화 종료 → Conversation 존재감 축소, PET 재중심
-    document.documentElement.classList.add('convIdle');
-    document.documentElement.classList.remove('convOn');
-    setTimeout(()=>{conv.innerHTML='';},900);
-  },readMs);
+  row._textEl=b;BL.setState(row,'created');
+  if(kind==='user'){
+    /* User Bubble Contract: 최소 8초 AND PET 답변 출력 AND 답변 후 2초 */
+    BL.setState(row,'waiting');
+    const born=Date.now();
+    row._answered=null;
+    row._resolveUser=()=>{ if(row._answered==null)return;
+      const dieAt=Math.max(born+8000, row._answered+2000);
+      setTimeout(()=>BL.destroy(row), Math.max(0,dieAt-Date.now()));};
+    BL.pendingUsers.push(row);
+    return row;
+  }
+  /* PET Bubble */
+  if(opt.searching){BL.setState(row,'waiting');return row;} /* 답변으로 Morph될 때까지 생명주기 보류 */
+  petAnswerLifecycle(row,clean);
+  return row;
 }
-
+function petAnswerLifecycle(row,textShown){
+  /* Context: 이 답변이 대기 중 질문들을 해소 → 질문 삭제 타이머 가동 */
+  const now=Date.now();
+  BL.pendingUsers.forEach(u=>{if(u._answered==null){u._answered=now;u._resolveUser();}});
+  BL.pendingUsers=BL.pendingUsers.filter(u=>u._answered==null);
+  const rMs=BL.readMs(textShown);
+  if(ttsOn){
+    /* Speech: TTS 종료 + 2초. Timer는 최후 보루(max(8s,읽기시간)+15s 상한 가드) */
+    BL.setState(row,'speaking');
+    let done=false;const finish=()=>{if(done)return;done=true;
+      BL.setState(row,'holding');setTimeout(()=>BL.destroy(row),2000);};
+    BL.ttsWaiters.push(finish);
+    setTimeout(finish, rMs+15000); /* 가드: Speech 신호 유실 시에도 결국 정리 */
+  }else{
+    BL.setState(row,'holding');
+    setTimeout(()=>BL.destroy(row), Math.max(8000,rMs));
+  }
+}
+function bubbleMorph(row,newText,asAnswer){
+  /* Searching Bubble Contract: 삭제·재생성 금지 — 같은 말풍선이 자란다 */
+  if(!row||!row._textEl)return;
+  const clean=String(newText||'').split('**').join('').split('##').join('').split('###').join('');
+  row._textEl.style.transition='opacity .25s';row._textEl.style.opacity=0.25;
+  setTimeout(()=>{row._textEl.textContent=clean;row._textEl.style.opacity=1;
+    conv.scrollTop=conv.scrollHeight;
+    if(asAnswer)petAnswerLifecycle(row,clean);},260);
+}
 /* ====== EC-02 Stage 1: 두뇌·목소리 연결 ======
    본판 v17.5 호출 규격 재사용(mp-proxy = LLM Adapter 상당). Engine Object 무접촉.
    본판 localStorage는 읽기 전용(st_slot, st_voice_map) — 절대 쓰지 않는다. */
@@ -393,6 +440,7 @@ async function speak(text){
   const vid=pickVoice(); if(!vid){vDiag('no-voice-id');return;}
   const my=++speakGen;
   if(curAudio){try{curAudio.pause();}catch(e){}}
+  const myTts=my;
   for(let i=0;i<text.length;i+=295){
     if(my!==speakGen)return;
     try{
@@ -414,6 +462,8 @@ async function speak(text){
       });
     }catch(e){vDiag('fetch-err '+String(e).slice(0,30));return;}
   }
+  /* WO-UX-005 Speech 축: 이 발화가 최신 세대로 완주했을 때만 종료 신호 */
+  if(myTts===speakGen){try{document.dispatchEvent(new CustomEvent('sa-tts-done'));}catch(e){}}
 }
 /* 자동재생 차단 해제: 다음 터치/클릭에서 보류 오디오 재생 */
 window.addEventListener('pointerdown',()=>{
@@ -449,21 +499,28 @@ async function brain(userText){
    Router는 LS 앞단. Engine(brain)은 0바이트 무수정 — 호출만 한다.
    Realtime → Provider(현재 NullProvider, WO-SRCH-002에서 교체) → Evidence 판정 → Safe/Composer.
    Instant 즉답 풀 배선은 대화 질 회귀 우려로 유보(CTO 보고 항목) — 비Realtime은 전부 기존 Engine. */
+const SA_DICT_VERSION='1.1.0';  /* Changelog: 1.0.0→1.1.0 markers 확장(어때·궁금·알려·뭐야 등), 서술형 종결 규칙 도입(무길이) */
 const SA_DICT={
   strong:['날씨','기온','미세먼지','실시간','뉴스','환율','주가','코스피','금값','유가','병원','약국','버스','지하철','길찾기'],
   strongPatterns:['비 와','비 오','비온','우산','몇 도','몇도'],
   weakTime:['오늘','내일','현재','지금','요즘','이번 주'],
-  requestMarkers:['?','얼마','알려줘','찾아줘','추천해','어디','언제','어떻게','몇']};
+  requestMarkers:['?','얼마','알려줘','찾아줘','추천해','어디','언제','어떻게','몇','어때','궁금','알려','뭐야','뭐 있','있을까','좀 찾','검색'],
+  stmtEndings:['았어','었어','왔어','됐어','했어','렸어','쳤어','랐어','났어','들어','좋아','싫어','팠어','졌어','았다','었다','했다','왔다','는데','거든','잖아','다녀','네','해','워','대','다','자','래','죠']};
 function saClassify(text){
-  const s=String(text||'').trim();if(!s)return{intent:'Conversation',matched:[],rule:'empty'};
-  const m=[];
-  SA_DICT.strong.forEach(t=>{if(s.indexOf(t)>=0)m.push(t);});
-  SA_DICT.strongPatterns.forEach(t=>{if(s.indexOf(t)>=0)m.push(t);});
-  if(m.length)return{intent:'Realtime',matched:m,rule:'strong'};
-  const wt=SA_DICT.weakTime.filter(t=>s.indexOf(t)>=0);
-  const rm=SA_DICT.requestMarkers.filter(t=>s.indexOf(t)>=0);
-  if(wt.length&&rm.length)return{intent:'Realtime',matched:wt.concat(rm),rule:'weak+marker'};
-  return{intent:'Conversation',matched:[],rule:'default'};}
+  const s=String(text||'').trim();
+  if(!s)return{intent:'Conversation',matched:[],markers:[],rule:'empty'};
+  const ms=[];
+  SA_DICT.strong.forEach(t=>{if(s.indexOf(t)>=0)ms.push(t);});
+  SA_DICT.strongPatterns.forEach(t=>{if(s.indexOf(t)>=0)ms.push(t);});
+  const mk=SA_DICT.requestMarkers.filter(t=>s.indexOf(t)>=0);
+  const wk=SA_DICT.weakTime.filter(t=>s.indexOf(t)>=0);
+  if((ms.length||wk.length)&&mk.length)return{intent:'Realtime',matched:ms,markers:mk,rule:'marker'};
+  if(ms.length){
+    let tail=s;while(tail.length&&'.!~ '.indexOf(tail.slice(-1))>=0)tail=tail.slice(0,-1);
+    const isStmt=s.indexOf('?')<0&&SA_DICT.stmtEndings.some(e=>tail.slice(-e.length)===e);
+    if(isStmt)return{intent:'Conversation',matched:ms,markers:[],rule:'statement-ending'};
+    return{intent:'Realtime',matched:ms,markers:[],rule:'strong-noun'};}
+  return{intent:'Conversation',matched:[],markers:[],rule:'default'};}
 const SA_SAFE={
   '날씨':'지금은 날씨를 확인할 수가 없어, 미안. 조금 있다 다시 물어봐 줄래? 나갈 거면 겉옷 하나 챙기자.',
   '기본':'지금은 그 정보를 확인할 수가 없어, 미안. 잠시 뒤에 다시 물어봐 줄래? 그동안 우리 얘기하고 있자.'};
@@ -570,26 +627,33 @@ async function routeInput(v){
   const t0=Date.now();
   const route=saClassify(v);
   if(route.intent!=='Realtime'){
-    SA_Trace.push({intent:'Conversation',provider:'-',evidenceCount:0,safety:false,path:'Engine',latencyMs:Date.now()-t0,ts:t0});
+    SA_Trace.push({intent:'Conversation',reason:route.rule,matchedMarker:'',matchedStrong:(route.matched||[]).join('+'),dictVersion:SA_DICT_VERSION,provider:'-',evidenceCount:0,safety:false,path:'Engine',routerMs:Date.now()-t0,providerMs:0,composerMs:0,latencyMs:Date.now()-t0,ts:t0});
     brain(v);return;}
   const cat=(route.matched||[]).some(t=>SA_WEATHER_TERMS.indexOf(t)>=0)?'weather':'general';
-  if(cat==='general')bubble('pet','잠깐만, 찾아볼게! 🔍');   /* 검색 대기 고지 — 침묵 방지(표현층) */
+  const routerMs=Date.now()-t0;
+  const sb=bubble('pet','잠깐만, 찾아볼게! 🔍',{searching:true});  /* Morph 대상 — 삭제·재생성 금지 */
+  const tp0=Date.now();
   const r=await SA_Platform.run(cat,v);
+  const providerMs=Date.now()-tp0;
   const evd=r.evidence;
   const pname=r.provider;
   if(r.err)try{console.log('[SA_ERR] '+pname+': '+r.err);}catch(e){}
+  const tc0=Date.now();
   let out;
   if(!evd.length){
     const key=(route.matched||[]).find(k=>SA_SAFE[k])||'기본';
     out=SA_SAFE[key];
-    SA_Trace.push({intent:'Realtime',provider:pname,evidenceCount:0,safety:true,path:'Safe',latencyMs:Date.now()-t0,ts:t0,err:r.err});
+    bubbleMorph(sb,out,true);
+    SA_Trace.push({intent:'Realtime',reason:route.rule,matchedMarker:(route.markers||[]).join('+'),matchedStrong:(route.matched||[]).join('+'),dictVersion:SA_DICT_VERSION,provider:pname,evidenceCount:0,safety:true,path:'Safe',routerMs:routerMs,providerMs:providerMs,composerMs:Date.now()-tc0,latencyMs:Date.now()-t0,ts:t0,err:r.err});
   }else{
-    out='찾아봤어! '+evd.map(e=>e.text).join(' / ')+' — 또 궁금한 거 있어?';
-    SA_Trace.push({intent:'Realtime',provider:pname,evidenceCount:evd.length,safety:false,path:'Composer',latencyMs:Date.now()-t0,ts:t0});
+    out='찾아봤어 😊 '+evd.map(e=>e.text).join(' / ')+' — 또 궁금한 거 있어?';
+    bubbleMorph(sb,'찾아봤어 😊',false);
+    setTimeout(()=>bubbleMorph(sb,out,true),700);
+    SA_Trace.push({intent:'Realtime',reason:route.rule,matchedMarker:(route.markers||[]).join('+'),matchedStrong:(route.matched||[]).join('+'),dictVersion:SA_DICT_VERSION,provider:pname,evidenceCount:evd.length,safety:false,path:'Composer',routerMs:routerMs,providerMs:providerMs,composerMs:Date.now()-tc0,latencyMs:Date.now()-t0,ts:t0});
   }
   hist.push({role:'user',content:v});hist.push({role:'assistant',content:out});
   while(hist.length>12)hist.shift();
-  bubble('pet',out);speak(out);}
+  speak(out);}
 document.getElementById('sendBtn').onclick=()=>{
   const el=document.getElementById('chatInput'),v=el.value.trim();if(!v)return;el.value='';
   bubble('user',v);
