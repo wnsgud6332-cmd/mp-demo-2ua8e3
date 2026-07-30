@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.3.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.3.2</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -554,7 +554,7 @@ function saAnthropicProvider(){let last=0,err=null;return{name:'anthropic',
         const r=await fetch(PROXY+'/v1/messages',{method:'POST',signal:ctx&&ctx.signal,
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:400,
-            system:'너는 따뜻한 AI 동반자야. 실시간 질문은 반드시 web_search로 먼저 확인하고, 확인한 사실만 반말로 짧게 말해. 검색 전 안내 문구(잠깐만·확인해볼게 류)는 쓰지 마. 지역이나 조건이 특정되지 않아도 되묻지 말고 대한민국 일반 기준으로 검색해서 답해.',
+            system:'너는 따뜻한 AI 동반자야. 실시간 질문은 반드시 web_search로 먼저 확인하고, 확인한 사실만 반말로 짧게 말해. 검색 전 안내 문구(잠깐만·확인해볼게 류)는 쓰지 마. 표·목록·마크다운 기호(별표·파이프·대시 구분선) 없이 자연스러운 문장으로만 말해. 지역이나 조건이 특정되지 않아도 되묻지 말고 대한민국 일반 기준으로 검색해서 답해.',
             messages:msgs,tools:[{type:'web_search_20250305',name:'web_search',max_uses:1}]})});
         if(!r.ok){err='http '+r.status;last=Date.now()-t0;return{ok:false,evidence:[],error:err};}
         const d=await r.json();stop=d.stop_reason||'';
