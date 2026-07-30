@@ -282,7 +282,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.0.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.0.2</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -776,19 +776,30 @@ function birthAnnounce(nm,done){
   let finished=false;
   const finish=()=>{if(finished)return;finished=true;
     clearTimeout(guard);auditObj('BIRTH_ANNOUNCEMENT_COMPLETED');done();};
-  const guard=setTimeout(finish,18000);              /* 안전장치: 어떤 경우에도 문은 열린다 */
+  const guard=setTimeout(finish,25000);              /* 안전장치: 어떤 경우에도 문은 열린다 */
   const player=new Audio();                          /* 단일 엘리먼트 재사용 — 모바일 오디오 언락 1회 */
   const vid=pickVoice();vDiag('BA voice '+String(vid).slice(0,12));
   const fetchSeg=t=>fetch(PROXY+'/v1/text-to-speech',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({voice_id:vid,text:t,model:'ssfm-v30',language:'kor',output:{audio_format:'mp3'}})})
     .then(r=>r.ok?r.blob():null).then(b=>b?URL.createObjectURL(b):null).catch(()=>null);
-  const clips=lines.map(fetchSeg);                   /* 병렬 선인출 — 재생은 순차, 침묵 없이 */
+  /* v4.0.2 수리: 동시 4연발 요청이 음성 서버 동시성 한계에 걸려 절반이 불발되던 결함.
+     → 순차 파이프라인: 현재 문장 재생을 시작하면 '다음 한 문장만' 미리 준비. 실패 시 1회 재시도. */
+  const clips=new Array(lines.length);
+  const ensure=i=>{
+    if(i>=lines.length)return null;
+    if(!clips[i])clips[i]=(async()=>{
+      let u=await fetchSeg(lines[i]);
+      if(!u){await new Promise(r=>setTimeout(r,400));u=await fetchSeg(lines[i]);
+        vDiag('BA seg'+(i+1)+(u?' 재시도OK':' tts-fail'));}
+      return u;})();
+    return clips[i];};
   const showCap=i=>{if(!cap)return;
     const d=document.createElement('div');d.className='bvLine';d.textContent=lines[i];
     cap.appendChild(d);requestAnimationFrame(()=>d.classList.add('in'));};
   const playSeg=i=>new Promise(res=>{
-    clips[i].then(url=>{
+    ensure(i).then(url=>{
+      ensure(i+1);                                   /* 다음 문장 준비는 지금부터 — 침묵 없이 */
       showCap(i);                                    /* 자막은 음성과 같은 순간에 자란다 */
       if(!url){vDiag('BA seg'+(i+1)+' tts-fail');setTimeout(res,1100);return;}
       player.src=url;
