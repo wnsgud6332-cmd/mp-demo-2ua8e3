@@ -282,7 +282,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.0</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.0.1</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -726,13 +726,12 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
               d.style.cssText='margin-top:16px;font-size:12.5px;opacity:.6;color:#ffeeda';
               d.textContent='문을 열어주세요';cap.appendChild(d);}
           });
-          /* 인사 음성은 방 안에서 — 소환 창 오디오 진정(출력 제어만, GB 코드 무접촉) */
-          let hushN=0;const hush=setInterval(()=>{try{
-            if(fr.contentWindow&&fr.contentWindow.speechSynthesis)fr.contentWindow.speechSynthesis.cancel();
-            const au=fr.contentDocument?fr.contentDocument.querySelectorAll('audio'):[];
-            for(let ai=0;ai<au.length;ai++){au[ai].muted=true;au[ai].pause();}
-          }catch(e){} if(++hushN>40)clearInterval(hush);},250);
-          audit('GREETING_DEFERRED(to:living_space)');
+          /* WO-UX-004.1: 구 인사 음성 원천 차단 — 탄생 완료 즉시 소환 창을 닫는다.
+             창 생명주기는 Launcher(LS) 소관, GB 코드 무접촉. 창이 닫히면 그 안의 모든 소리가 멈춘다
+             (DOM 밖 Audio 객체 경로까지 — 진정 인터벌로는 잡지 못하던 결함의 원천 수리). */
+          try{if(fr.contentWindow&&fr.contentWindow.speechSynthesis)fr.contentWindow.speechSynthesis.cancel();}catch(e){}
+          try{fr.remove();}catch(e){}
+          audit('GREETING_DEFERRED(to:living_space)');audit('BIRTH_WINDOW_CLOSED');
           clearTimeout(tmr);}
       }
     };
@@ -779,7 +778,7 @@ function birthAnnounce(nm,done){
     clearTimeout(guard);auditObj('BIRTH_ANNOUNCEMENT_COMPLETED');done();};
   const guard=setTimeout(finish,18000);              /* 안전장치: 어떤 경우에도 문은 열린다 */
   const player=new Audio();                          /* 단일 엘리먼트 재사용 — 모바일 오디오 언락 1회 */
-  const vid=pickVoice();
+  const vid=pickVoice();vDiag('BA voice '+String(vid).slice(0,12));
   const fetchSeg=t=>fetch(PROXY+'/v1/text-to-speech',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({voice_id:vid,text:t,model:'ssfm-v30',language:'kor',output:{audio_format:'mp3'}})})
@@ -791,11 +790,11 @@ function birthAnnounce(nm,done){
   const playSeg=i=>new Promise(res=>{
     clips[i].then(url=>{
       showCap(i);                                    /* 자막은 음성과 같은 순간에 자란다 */
-      if(!url){setTimeout(res,1100);return;}         /* TTS 불가: 자막만으로 의식 진행 */
+      if(!url){vDiag('BA seg'+(i+1)+' tts-fail');setTimeout(res,1100);return;}
       player.src=url;
       player.onended=()=>{URL.revokeObjectURL(url);res();};
       player.onerror=()=>{URL.revokeObjectURL(url);res();};
-      player.play().catch(()=>setTimeout(res,1100)); /* 자동재생 차단 시에도 흐름 유지 */
+      player.play().then(()=>vDiag('BA seg'+(i+1)+' 재생')).catch(()=>{vDiag('BA seg'+(i+1)+' 차단');setTimeout(res,1100);});
     });});
   (async()=>{
     await new Promise(r=>setTimeout(r,300));         /* 베일 등장 0.3초 */
