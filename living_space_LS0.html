@@ -283,7 +283,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.2</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -463,8 +463,97 @@ function saClassify(text){
 const SA_SAFE={
   '날씨':'지금은 날씨를 확인할 수가 없어, 미안. 조금 있다 다시 물어봐 줄래? 나갈 거면 겉옷 하나 챙기자.',
   '기본':'지금은 그 정보를 확인할 수가 없어, 미안. 잠시 뒤에 다시 물어봐 줄래? 그동안 우리 얘기하고 있자.'};
-const SA_Registry={_p:{name:'none',search:async()=>({ok:false,evidence:[],error:'no-provider(WO-SRCH-002)'})},
-  use(p){this._p=p;},get(){return this._p;}};
+/* ====== WO-SRCH-002: Provider Platform Foundation (설정 = ProviderRegistry.yaml v1.0 임베드) ====== */
+const SA_CFG={defaultCity:'대구',
+  selection:{weather:['weather','anthropic'],general:['anthropic']},
+  meta:{weather:{timeout:4000},anthropic:{timeout:8000},mock:{timeout:1000},nul:{timeout:500}}};
+const SA_WEATHER_TERMS=['날씨','기온','미세먼지','비 와','비 오','비온','우산','몇 도','몇도'];
+const SA_KPI={buf:[],rec(r){this.buf.push(r);if(this.buf.length>200)this.buf.shift();},
+  report(){const B=this.buf;if(!B.length)return null;
+    const lat=B.map(x=>x.latencyMs).slice().sort((a,b)=>a-b);
+    const p95=lat[Math.min(lat.length-1,Math.floor(lat.length*0.95))];
+    return{n:B.length,avgLatency:Math.round(lat.reduce((a,b)=>a+b,0)/lat.length),p95Latency:p95,
+      timeoutRate:B.filter(x=>x.timedOut).length/B.length,
+      evidenceSuccessRate:B.filter(x=>x.evidenceCount>0).length/B.length,
+      availability:B.filter(x=>x.ok).length/B.length};}};
+function saNullProvider(){return{name:'nul',async initialize(){},
+  async execute(){return{ok:false,evidence:[],error:'null-provider'};},
+  health(){return{state:'UP',lastLatencyMs:1};},async shutdown(){}};}
+function saMockProvider(){let sc={mode:'evidence'};return{name:'mock',
+  async initialize(c){if(c&&c.scenario)sc=c.scenario;},
+  async execute(){if(sc.mode==='empty')return{ok:true,evidence:[]};
+    return{ok:true,evidence:[{text:sc.text||'모의 검증 33도',source:'mock',fetchedAt:Date.now()}]};},
+  health(){return{state:'UP',lastLatencyMs:50};},async shutdown(){}};}
+function saAnthropicProvider(){let last=0,err=null;return{name:'anthropic',
+  async initialize(){},
+  async execute(q,ctx){const t0=Date.now();
+    try{
+      let msgs=[{role:'user',content:q}],uses=0,text='',stop='';
+      for(let hop=0;hop<4;hop++){
+        const r=await fetch(PROXY+'/v1/messages',{method:'POST',signal:ctx&&ctx.signal,
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:700,
+            system:'너는 따뜻한 AI 동반자야. 실시간 질문은 web_search로 확인해서 반말로 짧게, 확인한 사실만 말해.',
+            messages:msgs,tools:[{type:'web_search_20250305',name:'web_search',max_uses:2}]})});
+        if(!r.ok){err='http '+r.status;last=Date.now()-t0;return{ok:false,evidence:[],error:err};}
+        const d=await r.json();stop=d.stop_reason||'';
+        (d.content||[]).forEach(b=>{if(b.type==='server_tool_use')uses++;if(b.type==='text')text+=b.text;});
+        if(stop!=='pause_turn')break;
+        msgs=msgs.concat([{role:'assistant',content:d.content}]);
+      }
+      last=Date.now()-t0;
+      if(uses===0)return{ok:true,evidence:[],raw:{noSearch:true}};
+      return{ok:true,evidence:[{text:text.trim(),source:'anthropic.web_search x'+uses,fetchedAt:Date.now()}],
+        raw:{uses:uses,truncated:stop==='max_tokens'}};
+    }catch(e){err=String(e).slice(0,40);last=Date.now()-t0;return{ok:false,evidence:[],error:err};}},
+  health(){return{state:err?'DEGRADED':'UP',lastLatencyMs:last,lastError:err};},async shutdown(){}};}
+function saWeatherAdapter(){let last=0,err=null;
+  const STRIP=SA_DICT.strong.concat(SA_DICT.strongPatterns,SA_DICT.weakTime,SA_DICT.requestMarkers,['어때','와']);
+  const extractCity=q=>{let x=String(q||'');
+    STRIP.forEach(t=>{x=x.split(t).join(' ');});
+    x=x.replace(/[,.!?~·]/g,' ');
+    const tok=x.split(' ').filter(w=>w.trim().length>=2);
+    return tok.length?tok[0].trim():SA_CFG.defaultCity;};
+  return{name:'weather',_extractCity:extractCity,
+  async initialize(){},
+  async execute(q,ctx){const t0=Date.now();
+    try{
+      const city=extractCity(q);
+      const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(city)+'&count=1&language=ko',{signal:ctx&&ctx.signal});
+      const gd=await g.json();
+      if(!gd.results||!gd.results.length){last=Date.now()-t0;return{ok:true,evidence:[]};}
+      const loc=gd.results[0];
+      const f=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+loc.latitude+'&longitude='+loc.longitude+'&current=temperature_2m,precipitation&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=2',{signal:ctx&&ctx.signal});
+      const fd=await f.json();
+      const cur=fd.current,dl=fd.daily;
+      const txt=(loc.name||city)+' 지금 '+cur.temperature_2m+'도, 오늘 최고 '+dl.temperature_2m_max[0]+'도·최저 '+dl.temperature_2m_min[0]+'도, 내일 비 올 확률 '+dl.precipitation_probability_max[1]+'%';
+      last=Date.now()-t0;
+      return{ok:true,evidence:[{text:txt,source:'open-meteo',fetchedAt:Date.now()}]};
+    }catch(e){err=String(e).slice(0,40);last=Date.now()-t0;return{ok:false,evidence:[],error:err};}},
+  health(){return{state:err?'DEGRADED':'UP',lastLatencyMs:last,lastError:err};},async shutdown(){}};}
+const SA_Platform=(function(){
+  const provs={};
+  [saWeatherAdapter(),saAnthropicProvider(),saMockProvider(),saNullProvider()].forEach(p=>{provs[p.name]=p;p.initialize(SA_CFG.meta[p.name]||{});});
+  return{
+    get(n){return provs[n];},
+    async run(category,q){
+      const order=(SA_CFG.selection[category]||SA_CFG.selection.general).slice(0,2);
+      for(let i=0;i<order.length;i++){
+        const key=order[i]==='null'?'nul':order[i];
+        const p=provs[key];if(!p||p.health().state==='DOWN')continue;
+        const m=SA_CFG.meta[key]||{timeout:3000};
+        const ac=new AbortController();const t0=Date.now();let timedOut=false;
+        const timer=setTimeout(()=>{timedOut=true;ac.abort();},m.timeout);
+        let res;try{res=await p.execute(q,{signal:ac.signal});}catch(e){res={ok:false,evidence:[],error:'exec'};}
+        clearTimeout(timer);
+        const evd=saEvidence(timedOut?{ok:false,evidence:[]}:res);
+        SA_KPI.rec({provider:key,latencyMs:Date.now()-t0,timedOut:timedOut,evidenceCount:evd.length,ok:!!(res&&res.ok)&&!timedOut,ts:t0});
+        if(evd.length)return{provider:key,evidence:evd};
+      }
+      return{provider:order.join('-'),evidence:[]};
+    }};
+})();
+window.SA_Platform=SA_Platform;window.SA_KPI=SA_KPI;
 function saEvidence(res){
   if(!res||!res.ok||!Array.isArray(res.evidence))return[];
   return res.evidence.filter(e=>e&&typeof e.text==='string'&&e.text&&typeof e.source==='string'&&e.source&&e.fetchedAt);}
@@ -478,9 +567,10 @@ async function routeInput(v){
   if(route.intent!=='Realtime'){
     SA_Trace.push({intent:'Conversation',provider:'-',evidenceCount:0,safety:false,path:'Engine',latencyMs:Date.now()-t0,ts:t0});
     brain(v);return;}
-  const res=await SA_Registry.get().search(v,{});
-  const evd=saEvidence(res);
-  const pname=SA_Registry.get().name;
+  const cat=(route.matched||[]).some(t=>SA_WEATHER_TERMS.indexOf(t)>=0)?'weather':'general';
+  const r=await SA_Platform.run(cat,v);
+  const evd=r.evidence;
+  const pname=r.provider;
   let out;
   if(!evd.length){
     const key=(route.matched||[]).find(k=>SA_SAFE[k])||'기본';
@@ -499,6 +589,11 @@ document.getElementById('sendBtn').onclick=()=>{
   routeInput(v);
 };
 document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('sendBtn').onclick();});
+/* Performance_KPI v1.0: traceDiag 탭 → KPI 5지표 요약 */
+document.getElementById('traceDiag').addEventListener('click',()=>{
+  const rep=SA_KPI.report();if(!rep)return;
+  document.getElementById('traceDiag').textContent='KPI n'+rep.n+' avg'+rep.avgLatency+'ms p95:'+rep.p95Latency+'ms to:'+Math.round(rep.timeoutRate*100)+'% ev:'+Math.round(rep.evidenceSuccessRate*100)+'% up:'+Math.round(rep.availability*100)+'%';
+  try{console.log('[KPI] '+JSON.stringify(rep));}catch(e){}});
 /* 입력 중 PET 반응: 입력창을 살짝 내려다보고, 꼬리를 흔든다 */
 const ci=document.getElementById('chatInput');
 ci.addEventListener('focus',()=>{typingMode=true;
