@@ -229,6 +229,7 @@ html.doorPush #camera{transform:scale(1.05)}
 #petSpeech::after{content:'';position:absolute;left:50%;top:100%;transform:translateX(-50%);
   border:8px solid transparent;border-top-color:rgba(32,23,36,.9)}
 #idDiag{position:fixed;left:70px;bottom:16px;z-index:98;font-size:9px;color:rgba(160,220,255,.55);font-family:monospace}
+#traceDiag{position:fixed;right:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(180,255,200,.55);font-family:monospace;max-width:58vw;overflow:hidden;white-space:nowrap}
 #paBadge{position:fixed;left:12px;bottom:12px;z-index:99;display:none;padding:6px 10px;border-radius:8px;
   font-size:10.5px;line-height:1.5;background:rgba(0,0,0,.62);color:#9fe8c0;
   border:1px solid rgba(159,232,192,.3);font-family:ui-monospace,monospace;white-space:pre;}
@@ -282,8 +283,8 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.0.3</div>
-<div id="idDiag"></div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.1</div>
+<div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
 <div id="demoPanel">
@@ -440,10 +441,62 @@ async function brain(userText){
     bubble('pet','(연습 모드) 지금은 생각이 잘 안 닿아… 잠시 뒤에 다시 말 걸어줘.');
   }
 }
+/* ====== WO-SRCH-001.1: Input Routing Wiring (Freeze v1.1 · 7 Contracts) ======
+   Router는 LS 앞단. Engine(brain)은 0바이트 무수정 — 호출만 한다.
+   Realtime → Provider(현재 NullProvider, WO-SRCH-002에서 교체) → Evidence 판정 → Safe/Composer.
+   Instant 즉답 풀 배선은 대화 질 회귀 우려로 유보(CTO 보고 항목) — 비Realtime은 전부 기존 Engine. */
+const SA_DICT={
+  strong:['날씨','기온','미세먼지','실시간','뉴스','환율','주가','코스피','금값','유가','병원','약국','버스','지하철','길찾기'],
+  strongPatterns:['비 와','비 오','비온','우산','몇 도','몇도'],
+  weakTime:['오늘','내일','현재','지금','요즘','이번 주'],
+  requestMarkers:['?','얼마','알려줘','찾아줘','추천해','어디','언제','어떻게','몇']};
+function saClassify(text){
+  const s=String(text||'').trim();if(!s)return{intent:'Conversation',matched:[],rule:'empty'};
+  const m=[];
+  SA_DICT.strong.forEach(t=>{if(s.indexOf(t)>=0)m.push(t);});
+  SA_DICT.strongPatterns.forEach(t=>{if(s.indexOf(t)>=0)m.push(t);});
+  if(m.length)return{intent:'Realtime',matched:m,rule:'strong'};
+  const wt=SA_DICT.weakTime.filter(t=>s.indexOf(t)>=0);
+  const rm=SA_DICT.requestMarkers.filter(t=>s.indexOf(t)>=0);
+  if(wt.length&&rm.length)return{intent:'Realtime',matched:wt.concat(rm),rule:'weak+marker'};
+  return{intent:'Conversation',matched:[],rule:'default'};}
+const SA_SAFE={
+  '날씨':'지금은 날씨를 확인할 수가 없어, 미안. 조금 있다 다시 물어봐 줄래? 나갈 거면 겉옷 하나 챙기자.',
+  '기본':'지금은 그 정보를 확인할 수가 없어, 미안. 잠시 뒤에 다시 물어봐 줄래? 그동안 우리 얘기하고 있자.'};
+const SA_Registry={_p:{name:'none',search:async()=>({ok:false,evidence:[],error:'no-provider(WO-SRCH-002)'})},
+  use(p){this._p=p;},get(){return this._p;}};
+function saEvidence(res){
+  if(!res||!res.ok||!Array.isArray(res.evidence))return[];
+  return res.evidence.filter(e=>e&&typeof e.text==='string'&&e.text&&typeof e.source==='string'&&e.source&&e.fetchedAt);}
+const SA_Trace={buf:[],push(t){this.buf.push(t);if(this.buf.length>50)this.buf.shift();
+  const el=document.getElementById('traceDiag');
+  if(el)el.textContent='trace: '+t.intent+'·'+t.provider+'·ev'+t.evidenceCount+'·'+(t.safety?'SAFE':'ok')+'·'+t.latencyMs+'ms';
+  try{console.log('[TRACE] '+JSON.stringify(t));}catch(e){}}};
+async function routeInput(v){
+  const t0=Date.now();
+  const route=saClassify(v);
+  if(route.intent!=='Realtime'){
+    SA_Trace.push({intent:'Conversation',provider:'-',evidenceCount:0,safety:false,path:'Engine',latencyMs:Date.now()-t0,ts:t0});
+    brain(v);return;}
+  const res=await SA_Registry.get().search(v,{});
+  const evd=saEvidence(res);
+  const pname=SA_Registry.get().name;
+  let out;
+  if(!evd.length){
+    const key=(route.matched||[]).find(k=>SA_SAFE[k])||'기본';
+    out=SA_SAFE[key];
+    SA_Trace.push({intent:'Realtime',provider:pname,evidenceCount:0,safety:true,path:'Safe',latencyMs:Date.now()-t0,ts:t0});
+  }else{
+    out='찾아봤어! '+evd.map(e=>e.text).join(' / ')+' — 또 궁금한 거 있어?';
+    SA_Trace.push({intent:'Realtime',provider:pname,evidenceCount:evd.length,safety:false,path:'Composer',latencyMs:Date.now()-t0,ts:t0});
+  }
+  hist.push({role:'user',content:v});hist.push({role:'assistant',content:out});
+  while(hist.length>12)hist.shift();
+  bubble('pet',out);speak(out);}
 document.getElementById('sendBtn').onclick=()=>{
   const el=document.getElementById('chatInput'),v=el.value.trim();if(!v)return;el.value='';
   bubble('user',v);
-  brain(v);
+  routeInput(v);
 };
 document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('sendBtn').onclick();});
 /* 입력 중 PET 반응: 입력창을 살짝 내려다보고, 꼬리를 흔든다 */
