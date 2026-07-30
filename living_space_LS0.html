@@ -279,7 +279,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.8</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.9</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -670,7 +670,10 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
         '#nameInput{background:rgba(255,246,235,.07) !important;border:1px solid rgba(255,220,180,.28) !important;color:#fff2e4 !important;border-radius:12px !important}',
         '#nameBtn,#voicePick button{background:linear-gradient(160deg,#f0c194,#d99a68) !important;color:#241a26 !important;border:none !important;border-radius:12px !important;font-weight:800 !important}',
         '/* WO-UX-003: Greeting Screen 제거 — 인사는 Living Space에서. 소환 창의 대화 UI는 표시하지 않는다 */',
-        '#bubble,#chatLog,#inputRow{opacity:0 !important;pointer-events:none !important}'
+        '#bubble,#chatLog,#inputRow{opacity:0 !important;pointer-events:none !important}',
+        '/* WO-UX-003 Rev.1 P0-2: Birth 과정에서 구세대 데모 PET·배경·HUD 비표시 — LS 세계관만 유지 */',
+        '#petSvgWrap,#scene,#camVideo,#compatBanner{display:none !important}',
+        '#header,#factChips,#expBarOuter,#intimacyBar,#ctxStat,#camStat{opacity:0 !important;pointer-events:none !important}'
       ].join('\n');
       doc.head.appendChild(st);
       auditObj('BIRTH_SKIN_APPLIED');
@@ -787,14 +790,17 @@ function firstEncounter(name){
   setTimeout(()=>{petSpeech.textContent=segs[0];petSpeech.classList.add('show');speak(greet);FE('greeting 1');},4700);
   /* 0.5초 후 본문 */
   setTimeout(()=>{petSpeech.textContent=segs[0]+'\n'+segs[1];FE('greeting 2');},5200);
-  /* 같은 내용이 Chat History에 기록되고 입력이 열린다 */
+  /* WO-UX-003 Rev.1 P0-1: 첫 인사는 말풍선에서만 — 사용자에게 보이는 채팅 UI에 중복 기록하지 않는다.
+     내부 메모리(hist)·감사 로그는 기존대로 유지. 말풍선은 사용자가 대화를 시작하면 접힌다. */
   setTimeout(()=>{
-    petSpeech.classList.remove('show');
-    bubble('pet',greet);
     hist.push({role:'assistant',content:greet});
     H.classList.remove('encounterOn');H.classList.remove('idleNow');
     petTilt.style.transform='';
-    FE('chat 기록 · 입력 활성화');
+    FE('입력 활성화 · 인사는 말풍선만(채팅 중복 기록 없음)');
+    const ci2=document.getElementById('chatInput'),sb2=document.getElementById('sendBtn');
+    const dismiss=()=>{petSpeech.classList.remove('show');
+      ci2.removeEventListener('focus',dismiss);sb2.removeEventListener('click',dismiss);};
+    ci2.addEventListener('focus',dismiss);sb2.addEventListener('click',dismiss);
   },8800);
 }
 function applyIdentity(id){  // 입장: 렌더러에 이름 반영
