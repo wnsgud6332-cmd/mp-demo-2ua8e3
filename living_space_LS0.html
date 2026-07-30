@@ -199,6 +199,9 @@ html.pa-fold-closed{--pet-w:min(62vw,300px)}
   color:#ffeeda;font-size:15px;letter-spacing:.06em;opacity:0;transition:opacity .9s ease;pointer-events:none;text-align:center;line-height:1.7}
 #birthVeil.on{opacity:1;pointer-events:auto}
 #bvGlow{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle, rgba(255,220,170,.9), rgba(255,190,130,.25) 55%, transparent 75%);animation:boPulse 1.6s ease-in-out infinite}
+#bvCap{text-align:center;min-height:130px;padding:0 24px}
+.bvLine{opacity:0;transform:translateY(7px);transition:opacity .6s ease,transform .6s ease;font-size:16px;letter-spacing:.05em;line-height:2;color:#ffeeda}
+.bvLine.in{opacity:1;transform:none}
 #doorL,#doorR{position:fixed;top:0;bottom:0;width:51%;z-index:320;pointer-events:none;visibility:hidden;
   background:linear-gradient(165deg,#3b2c34 0%,#241a26 55%,#120c16 100%);
   transition:transform 1.7s cubic-bezier(.7,0,.22,1)}
@@ -279,7 +282,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v3.9</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.0</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -681,7 +684,7 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
     ov.appendChild(bar);ov.appendChild(fr);document.body.appendChild(ov);
     setTimeout(()=>{intro.classList.add('gone');fr.classList.add('in');},1600);
     audit('LAUNCH_SENT');audit('BIRTH_STARTED');
-    let done=false;
+    let done=false,announced=false;
     const finish=()=>{done=true;clearInterval(poll);clearTimeout(tmr);};
     const blocked=(title,auditTail)=>{  // Cancel/Timeout/Error 공통: 입장 금지 화면
       finish();auditTail.forEach(audit);
@@ -702,18 +705,27 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
       if(done)return;
       const v=IdentityGateway.assess();
       if(v.nextAction==='RECORD_FREEZE_ONCE'||v.nextAction==='ENTER_LIVING_SPACE'){
-        if(btnEnter.disabled){
+        if(btnEnter.disabled&&!announced){announced=true;
           try{const st=JSON.parse(localStorage.getItem('myaipet-demo-v10'));
             resultPayload={identityId:'local-'+launchId,displayName:st.petName,voiceId:pickVoice(),sessionId:SESSION.id,launcherKind:'birth'};
           }catch(e){resultPayload=null;}
           audit('COMPLETE(result:identityId,displayName,voiceId)');
-          btnEnter.disabled=false;btnEnter.textContent='문 열기';
+          btnEnter.textContent='문 열기';            /* WO-UX-004: 음성 완료 후 활성화(기본값) */
           const nm=((resultPayload&&resultPayload.displayName)||'아이').replace(/</g,'&lt;');
-          msg.textContent='✨ 태어났어요 — 문을 열고 만나러 가요';
+          msg.textContent='✨ 아이가 태어나고 있어요…';
           /* WO-UX-003: Greeting Screen 제거 — 소환 창을 베일로 덮는다(GB 무수정, 표현층) */
           const veil=document.createElement('div');veil.id='birthVeil';
-          veil.innerHTML='<div id="bvGlow"></div><div>'+nm+' — 태어났어요<br><span style="font-size:12.5px;opacity:.65">문을 열면, 첫 만남이 시작돼요</span></div>';
+          veil.innerHTML='<div id="bvGlow"></div><div id="bvCap"></div>';
           ov.appendChild(veil);requestAnimationFrame(()=>veil.classList.add('on'));
+          /* WO-UX-004: Birth Announcement — 베일 위에서 탄생을 알린다 */
+          birthAnnounce(nm,()=>{
+            btnEnter.disabled=false;
+            msg.textContent='✨ 문을 열고 만나러 가요';
+            const cap=document.getElementById('bvCap');
+            if(cap){const d=document.createElement('div');
+              d.style.cssText='margin-top:16px;font-size:12.5px;opacity:.6;color:#ffeeda';
+              d.textContent='문을 열어주세요';cap.appendChild(d);}
+          });
           /* 인사 음성은 방 안에서 — 소환 창 오디오 진정(출력 제어만, GB 코드 무접촉) */
           let hushN=0;const hush=setInterval(()=>{try{
             if(fr.contentWindow&&fr.contentWindow.speechSynthesis)fr.contentWindow.speechSynthesis.cancel();
@@ -753,6 +765,48 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
 /* ====== WO-UX-003: First Encounter Sequence (Presentation Layer only) ======
    Greeting 생성·저장은 Golden Brain 소관(무접촉). LS는 표시 순서만:
    Door → 조명 → Observe(바라봄+갸웃) → Speech Bubble(2단) → Chat History → 입력 활성화 */
+/* ====== WO-UX-004: Birth Announcement Voice (Presentation Layer only) ======
+   이 음성은 Greeting이 아니다 — 탄생을 세상에 알리는 마지막 의식.
+   Voice: 방금 선택된 것 그대로(pickVoice 재사용, 생성·매핑 수정 0).
+   저장: Memory·Conversation·Greeting 어디에도 기록하지 않는다(연출).
+   감사: BIRTH_ANNOUNCEMENT_* — Greeting 이벤트와 절대 합치지 않는다. */
+function birthAnnounce(nm,done){
+  const cap=document.getElementById('bvCap');
+  const lines=[nm+'…','태어났어요.','문을 열면…','우리의 이야기가 시작돼요.'];
+  auditObj('BIRTH_ANNOUNCEMENT_STARTED');
+  let finished=false;
+  const finish=()=>{if(finished)return;finished=true;
+    clearTimeout(guard);auditObj('BIRTH_ANNOUNCEMENT_COMPLETED');done();};
+  const guard=setTimeout(finish,18000);              /* 안전장치: 어떤 경우에도 문은 열린다 */
+  const player=new Audio();                          /* 단일 엘리먼트 재사용 — 모바일 오디오 언락 1회 */
+  const vid=pickVoice();
+  const fetchSeg=t=>fetch(PROXY+'/v1/text-to-speech',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({voice_id:vid,text:t,model:'ssfm-v30',language:'kor',output:{audio_format:'mp3'}})})
+    .then(r=>r.ok?r.blob():null).then(b=>b?URL.createObjectURL(b):null).catch(()=>null);
+  const clips=lines.map(fetchSeg);                   /* 병렬 선인출 — 재생은 순차, 침묵 없이 */
+  const showCap=i=>{if(!cap)return;
+    const d=document.createElement('div');d.className='bvLine';d.textContent=lines[i];
+    cap.appendChild(d);requestAnimationFrame(()=>d.classList.add('in'));};
+  const playSeg=i=>new Promise(res=>{
+    clips[i].then(url=>{
+      showCap(i);                                    /* 자막은 음성과 같은 순간에 자란다 */
+      if(!url){setTimeout(res,1100);return;}         /* TTS 불가: 자막만으로 의식 진행 */
+      player.src=url;
+      player.onended=()=>{URL.revokeObjectURL(url);res();};
+      player.onerror=()=>{URL.revokeObjectURL(url);res();};
+      player.play().catch(()=>setTimeout(res,1100)); /* 자동재생 차단 시에도 흐름 유지 */
+    });});
+  (async()=>{
+    await new Promise(r=>setTimeout(r,300));         /* 베일 등장 0.3초 */
+    for(let i=0;i<lines.length;i++){
+      await playSeg(i);
+      if(i<lines.length-1)await new Promise(r=>setTimeout(r,600)); /* 숨 쉬듯 0.6초 */
+    }
+    await new Promise(r=>setTimeout(r,400));
+    finish();
+  })();
+}
 function readBrainGreeting(name){
   try{
     const st=JSON.parse(localStorage.getItem('myaipet-demo-v10'));
