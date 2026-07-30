@@ -283,7 +283,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.2.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.2.2</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -350,7 +350,8 @@ function bubble(kind,text){
   document.documentElement.classList.remove('convIdle');
   document.documentElement.classList.add('convOn');
   const row=document.createElement('div');row.className='msgRow '+kind;
-  const b=document.createElement('div');b.className='bub '+kind;b.textContent=text;b.style.opacity=1;b.style.transform='none';
+  const clean=String(text||'').split('**').join('').split('##').join('').split('###').join('');
+  const b=document.createElement('div');b.className='bub '+kind;b.textContent=clean;b.style.opacity=1;b.style.transform='none';
   const t=document.createElement('div');t.className='tstamp';t.textContent=stampNow();
   if(kind==='pet'){
     const av=document.createElement('img');av.className='avatar';
@@ -361,11 +362,14 @@ function bubble(kind,text){
   while(conv.children.length>6)conv.removeChild(conv.firstChild);
   conv.scrollTop=conv.scrollHeight;
   clearTimeout(idleT);
+  /* v4.2.2: 읽기 시간 비례 페이드 — 긴 답변(검색 결과)이 읽기 전에 사라지지 않게.
+     기본 7초 + 글자당 60ms, 상한 30초. 새 말풍선이 오면 타이머 재시작(기존 동작 유지) */
+  const readMs=Math.min(30000, 7000 + String(text||'').length*60);
   idleT=setTimeout(()=>{ // 대화 종료 → Conversation 존재감 축소, PET 재중심
     document.documentElement.classList.add('convIdle');
     document.documentElement.classList.remove('convOn');
     setTimeout(()=>{conv.innerHTML='';},900);
-  },7000);
+  },readMs);
 }
 
 /* ====== EC-02 Stage 1: 두뇌·목소리 연결 ======
