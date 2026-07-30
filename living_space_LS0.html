@@ -283,7 +283,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.2</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.2.1</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -466,7 +466,7 @@ const SA_SAFE={
 /* ====== WO-SRCH-002: Provider Platform Foundation (설정 = ProviderRegistry.yaml v1.0 임베드) ====== */
 const SA_CFG={defaultCity:'대구',
   selection:{weather:['weather','anthropic'],general:['anthropic']},
-  meta:{weather:{timeout:4000},anthropic:{timeout:8000},mock:{timeout:1000},nul:{timeout:500}}};
+  meta:{weather:{timeout:4000},anthropic:{timeout:18000},mock:{timeout:1000},nul:{timeout:500}}};
 const SA_WEATHER_TERMS=['날씨','기온','미세먼지','비 와','비 오','비온','우산','몇 도','몇도'];
 const SA_KPI={buf:[],rec(r){this.buf.push(r);if(this.buf.length>200)this.buf.shift();},
   report(){const B=this.buf;if(!B.length)return null;
@@ -492,9 +492,9 @@ function saAnthropicProvider(){let last=0,err=null;return{name:'anthropic',
       for(let hop=0;hop<4;hop++){
         const r=await fetch(PROXY+'/v1/messages',{method:'POST',signal:ctx&&ctx.signal,
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:700,
+          body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:400,
             system:'너는 따뜻한 AI 동반자야. 실시간 질문은 web_search로 확인해서 반말로 짧게, 확인한 사실만 말해.',
-            messages:msgs,tools:[{type:'web_search_20250305',name:'web_search',max_uses:2}]})});
+            messages:msgs,tools:[{type:'web_search_20250305',name:'web_search',max_uses:1}]})});
         if(!r.ok){err='http '+r.status;last=Date.now()-t0;return{ok:false,evidence:[],error:err};}
         const d=await r.json();stop=d.stop_reason||'';
         (d.content||[]).forEach(b=>{if(b.type==='server_tool_use')uses++;if(b.type==='text')text+=b.text;});
@@ -537,7 +537,7 @@ const SA_Platform=(function(){
   return{
     get(n){return provs[n];},
     async run(category,q){
-      const order=(SA_CFG.selection[category]||SA_CFG.selection.general).slice(0,2);
+      const order=(SA_CFG.selection[category]||SA_CFG.selection.general).slice(0,2);let lastErr='';
       for(let i=0;i<order.length;i++){
         const key=order[i]==='null'?'nul':order[i];
         const p=provs[key];if(!p||p.health().state==='DOWN')continue;
@@ -549,8 +549,9 @@ const SA_Platform=(function(){
         const evd=saEvidence(timedOut?{ok:false,evidence:[]}:res);
         SA_KPI.rec({provider:key,latencyMs:Date.now()-t0,timedOut:timedOut,evidenceCount:evd.length,ok:!!(res&&res.ok)&&!timedOut,ts:t0});
         if(evd.length)return{provider:key,evidence:evd};
+        lastErr=timedOut?'timeout@'+m.timeout:(res&&res.error)||'ev0';
       }
-      return{provider:order.join('-'),evidence:[]};
+      return{provider:order.join('-'),evidence:[],err:lastErr};
     }};
 })();
 window.SA_Platform=SA_Platform;window.SA_KPI=SA_KPI;
@@ -559,7 +560,7 @@ function saEvidence(res){
   return res.evidence.filter(e=>e&&typeof e.text==='string'&&e.text&&typeof e.source==='string'&&e.source&&e.fetchedAt);}
 const SA_Trace={buf:[],push(t){this.buf.push(t);if(this.buf.length>50)this.buf.shift();
   const el=document.getElementById('traceDiag');
-  if(el)el.textContent='trace: '+t.intent+'·'+t.provider+'·ev'+t.evidenceCount+'·'+(t.safety?'SAFE':'ok')+'·'+t.latencyMs+'ms';
+  if(el)el.textContent='trace: '+t.intent+'·'+t.provider+'·ev'+t.evidenceCount+'·'+(t.safety?'SAFE':'ok')+'·'+t.latencyMs+'ms'+(t.err?('·'+t.err):'');
   try{console.log('[TRACE] '+JSON.stringify(t));}catch(e){}}};
 async function routeInput(v){
   const t0=Date.now();
@@ -568,14 +569,16 @@ async function routeInput(v){
     SA_Trace.push({intent:'Conversation',provider:'-',evidenceCount:0,safety:false,path:'Engine',latencyMs:Date.now()-t0,ts:t0});
     brain(v);return;}
   const cat=(route.matched||[]).some(t=>SA_WEATHER_TERMS.indexOf(t)>=0)?'weather':'general';
+  if(cat==='general')bubble('pet','잠깐만, 찾아볼게! 🔍');   /* 검색 대기 고지 — 침묵 방지(표현층) */
   const r=await SA_Platform.run(cat,v);
   const evd=r.evidence;
   const pname=r.provider;
+  if(r.err)try{console.log('[SA_ERR] '+pname+': '+r.err);}catch(e){}
   let out;
   if(!evd.length){
     const key=(route.matched||[]).find(k=>SA_SAFE[k])||'기본';
     out=SA_SAFE[key];
-    SA_Trace.push({intent:'Realtime',provider:pname,evidenceCount:0,safety:true,path:'Safe',latencyMs:Date.now()-t0,ts:t0});
+    SA_Trace.push({intent:'Realtime',provider:pname,evidenceCount:0,safety:true,path:'Safe',latencyMs:Date.now()-t0,ts:t0,err:r.err});
   }else{
     out='찾아봤어! '+evd.map(e=>e.text).join(' / ')+' — 또 궁금한 거 있어?';
     SA_Trace.push({intent:'Realtime',provider:pname,evidenceCount:evd.length,safety:false,path:'Composer',latencyMs:Date.now()-t0,ts:t0});
