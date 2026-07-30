@@ -17,11 +17,13 @@ textarea{width:100%;height:120px;margin-top:8px;background:#0d0a12;color:#ffeeda
 </style></head><body>
 <h1>Search Audit Probe <small>WO-SRCH-000 계측기 · 제품 무변경</small></h1>
 <div><button id="runLS">① 제품 경로 21회 실측</button><button id="runGB">② GB 검색 경로 7회 실측</button><button id="stopBtn">중지</button></div>
+<div id="env" style="font-size:11px;font-family:monospace;color:#ffd9a8;margin:4px 0"></div>
+<div id="warn" style="display:none;background:#5a2430;color:#ffd9d9;padding:10px;border-radius:8px;font-size:13px;margin:6px 0">⚠ 이 파일을 직접 열었습니다(주소가 file://). 외부 호출이 전부 차단됩니다.<br>반드시 GitHub에 올린 뒤 <b>https://wnsgud6332-cmd.github.io/mp-demo-2ua8e3/search_audit_probe.html</b> 주소로 여세요.</div>
 <div id="prog">대기 중 — 버튼을 누르면 순차 실행됩니다 (약 1~3분)</div>
 <div id="tblWrap"></div><div id="sum"></div>
 <div>결과 텍스트(전체 선택 → 복사 → Claude에게 붙여넣기):</div>
 <textarea id="out" readonly></textarea>
-<div id="ver">PROBE v1.0</div>
+<div id="ver">PROBE v1.1</div>
 <script>
 const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
 const personaFor=n=>'너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마.';
@@ -34,7 +36,16 @@ const CATS=[['날씨',['대구 날씨 어때?','서울 내일 비 와?','부산 
 ['병원',['대구 일요일에 하는 약국 알려줘','수성구 정형외과 추천해줘','지금 문 연 소아과 있어?']],
 ['지도',['동대구역에서 수성못 어떻게 가?','대구공항 가는 버스 알려줘','반월당역 몇 호선이야?']]];
 const REFUSE=/(알 수 없|확인할 수 없|실시간|제공할 수 없|죄송|어려워|모르)/;
-let rows=[],stop=false;
+let rows=[],stop=false,LINE='회선 점검 중…';
+const ORIGIN=location.origin;
+document.getElementById('env').textContent='origin: '+ORIGIN+' · online: '+navigator.onLine;
+if(location.protocol==='file:')document.getElementById('warn').style.display='block';
+(async()=>{const t0=performance.now();
+  try{const r=await fetch(PROXY+'/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1,messages:[{role:'user',content:'ping'}]})});
+    LINE='회선: HTTP '+r.status+(r.ok?' OK':' 오류')+' ('+Math.round(performance.now()-t0)+'ms)';
+  }catch(e){LINE='회선: 실패 — '+String(e).slice(0,50)+' ('+Math.round(performance.now()-t0)+'ms)';}
+  document.getElementById('env').textContent='origin: '+ORIGIN+' · online: '+navigator.onLine+' · '+LINE;})();
 const prog=t=>document.getElementById('prog').textContent=t;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 function render(){
@@ -54,7 +65,7 @@ function render(){
       sum+='   '+c[0]+': '+co+'/'+CR.length+'\n';});
   });
   document.getElementById('sum').textContent=sum;
-  document.getElementById('out').value='=== Search Audit Probe v1.0 결과 ===\n'+sum+'\n#|경로|분류|질문|ms|in|out|stop|검색|판정|응답\n'+t;
+  document.getElementById('out').value='=== Search Audit Probe v1.1 결과 ===\norigin: '+ORIGIN+' · '+LINE+'\n'+sum+'\n#|경로|분류|질문|ms|in|out|stop|검색|판정|응답\n'+t;
 }
 async function callOnce(path,cat,q){
   const t0=performance.now();
