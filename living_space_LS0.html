@@ -282,7 +282,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.0.2</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.0.3</div>
 <div id="idDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -766,9 +766,9 @@ const IdentityAdapter={  // WO-IMPL-002: Golden Brain 규약 호출만
    Door → 조명 → Observe(바라봄+갸웃) → Speech Bubble(2단) → Chat History → 입력 활성화 */
 /* ====== WO-UX-004: Birth Announcement Voice (Presentation Layer only) ======
    이 음성은 Greeting이 아니다 — 탄생을 세상에 알리는 마지막 의식.
-   Voice: 방금 선택된 것 그대로(pickVoice 재사용, 생성·매핑 수정 0).
-   저장: Memory·Conversation·Greeting 어디에도 기록하지 않는다(연출).
-   감사: BIRTH_ANNOUNCEMENT_* — Greeting 이벤트와 절대 합치지 않는다. */
+   Voice: 방금 선택된 것 그대로(pickVoice 재사용). 저장 0. 감사: BIRTH_ANNOUNCEMENT_* (Greeting과 분리).
+   v4.0.3(GS 제안 채택): TTS는 전체 대본 1회 요청 — 요청 횟수 제한 원천 회피.
+   자막 4줄은 오디오 실제 길이를 읽어 문장 길이+숨(…) 가중치로 배분해 음성과 함께 자란다. */
 function birthAnnounce(nm,done){
   const cap=document.getElementById('bvCap');
   const lines=[nm+'…','태어났어요.','문을 열면…','우리의 이야기가 시작돼요.'];
@@ -777,43 +777,47 @@ function birthAnnounce(nm,done){
   const finish=()=>{if(finished)return;finished=true;
     clearTimeout(guard);auditObj('BIRTH_ANNOUNCEMENT_COMPLETED');done();};
   const guard=setTimeout(finish,25000);              /* 안전장치: 어떤 경우에도 문은 열린다 */
-  const player=new Audio();                          /* 단일 엘리먼트 재사용 — 모바일 오디오 언락 1회 */
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const player=new Audio();
   const vid=pickVoice();vDiag('BA voice '+String(vid).slice(0,12));
-  const fetchSeg=t=>fetch(PROXY+'/v1/text-to-speech',{method:'POST',
+  const fetchTTS=t=>fetch(PROXY+'/v1/text-to-speech',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({voice_id:vid,text:t,model:'ssfm-v30',language:'kor',output:{audio_format:'mp3'}})})
     .then(r=>r.ok?r.blob():null).then(b=>b?URL.createObjectURL(b):null).catch(()=>null);
-  /* v4.0.2 수리: 동시 4연발 요청이 음성 서버 동시성 한계에 걸려 절반이 불발되던 결함.
-     → 순차 파이프라인: 현재 문장 재생을 시작하면 '다음 한 문장만' 미리 준비. 실패 시 1회 재시도. */
-  const clips=new Array(lines.length);
-  const ensure=i=>{
-    if(i>=lines.length)return null;
-    if(!clips[i])clips[i]=(async()=>{
-      let u=await fetchSeg(lines[i]);
-      if(!u){await new Promise(r=>setTimeout(r,400));u=await fetchSeg(lines[i]);
-        vDiag('BA seg'+(i+1)+(u?' 재시도OK':' tts-fail'));}
-      return u;})();
-    return clips[i];};
-  const showCap=i=>{if(!cap)return;
+  const showCap=i=>{if(!cap||i>=lines.length)return;
     const d=document.createElement('div');d.className='bvLine';d.textContent=lines[i];
     cap.appendChild(d);requestAnimationFrame(()=>d.classList.add('in'));};
-  const playSeg=i=>new Promise(res=>{
-    ensure(i).then(url=>{
-      ensure(i+1);                                   /* 다음 문장 준비는 지금부터 — 침묵 없이 */
-      showCap(i);                                    /* 자막은 음성과 같은 순간에 자란다 */
-      if(!url){vDiag('BA seg'+(i+1)+' tts-fail');setTimeout(res,1100);return;}
-      player.src=url;
-      player.onended=()=>{URL.revokeObjectURL(url);res();};
-      player.onerror=()=>{URL.revokeObjectURL(url);res();};
-      player.play().then(()=>vDiag('BA seg'+(i+1)+' 재생')).catch(()=>{vDiag('BA seg'+(i+1)+' 차단');setTimeout(res,1100);});
-    });});
-  (async()=>{
-    await new Promise(r=>setTimeout(r,300));         /* 베일 등장 0.3초 */
+  /* 문장 길이 + 숨(…=넉넉히, .=짧게) 가중치로 시작 시점 배분 */
+  const weights=lines.map(t=>t.length+(t.indexOf('…')>-1?5:1));
+  const totalW=weights.reduce((x,y)=>x+y,0);
+  const scheduleCaps=durSec=>{let acc=0;
     for(let i=0;i<lines.length;i++){
-      await playSeg(i);
-      if(i<lines.length-1)await new Promise(r=>setTimeout(r,600)); /* 숨 쉬듯 0.6초 */
+      const at=Math.max(0,Math.round(acc/totalW*durSec*1000));
+      setTimeout(()=>showCap(i),at);acc+=weights[i];}};
+  (async()=>{
+    await sleep(300);                                /* 베일 등장 0.3초 */
+    let url=await fetchTTS(lines.join(' '));
+    if(!url){await sleep(600);url=await fetchTTS(lines.join(' '));}
+    if(url){
+      player.src=url;
+      const playP=player.play();
+      const meta=await new Promise(res=>{
+        if(isFinite(player.duration)&&player.duration>0)return res(player.duration);
+        player.onloadedmetadata=()=>res(isFinite(player.duration)?player.duration:0);
+        setTimeout(()=>res(0),1500);});
+      const dur=meta>0?meta:(lines.join(' ').length*0.16+2);  /* 길이 미확인 시 글자당 추정 */
+      vDiag('BA 재생 '+(Math.round(dur*10)/10)+'s');
+      scheduleCaps(dur);
+      await new Promise(res=>{let d2=false;const end=()=>{if(!d2){d2=true;res();}};
+        player.onended=end;player.onerror=end;
+        if(playP&&playP.catch)playP.catch(()=>vDiag('BA 차단 — 자막 진행'));
+        setTimeout(end,(dur+1.2)*1000);});
+      URL.revokeObjectURL(url);
+    }else{
+      vDiag('BA tts-fail — 자막 의식으로 진행');
+      for(let i=0;i<lines.length;i++){showCap(i);await sleep(1500);}
     }
-    await new Promise(r=>setTimeout(r,400));
+    await sleep(400);
     finish();
   })();
 }
