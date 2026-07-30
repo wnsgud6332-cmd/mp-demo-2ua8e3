@@ -283,7 +283,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.2.2</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.2.3</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -364,7 +364,7 @@ function bubble(kind,text){
   clearTimeout(idleT);
   /* v4.2.2: 읽기 시간 비례 페이드 — 긴 답변(검색 결과)이 읽기 전에 사라지지 않게.
      기본 7초 + 글자당 60ms, 상한 30초. 새 말풍선이 오면 타이머 재시작(기존 동작 유지) */
-  const readMs=Math.min(30000, 7000 + String(text||'').length*60);
+  const readMs=Math.min(45000, 7000 + String(text||'').length*150);
   idleT=setTimeout(()=>{ // 대화 종료 → Conversation 존재감 축소, PET 재중심
     document.documentElement.classList.add('convIdle');
     document.documentElement.classList.remove('convOn');
