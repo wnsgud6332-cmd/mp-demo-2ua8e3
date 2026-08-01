@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.3.2</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.3.3</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -435,11 +435,23 @@ function pickVoice(){
 }
 let speakGen=0,curAudio=null,pendingUrl=null;
 const vDiag=t=>{const el=document.getElementById('voiceDiag');if(el)el.textContent='voice: '+t;};
+function deviceSpeak(text,gen){ /* v4.3.3 긴급 폴백: 외부 TTS 실패 시 기기 목소리 (B-1·B-3 선행) */
+  try{
+    if(!('speechSynthesis' in window)){vDiag('기기TTS 미지원');return;}
+    speechSynthesis.cancel();
+    var u=new SpeechSynthesisUtterance(text);
+    u.lang='ko-KR';u.rate=0.95;
+    var vs=(speechSynthesis.getVoices()||[]);for(var i=0;i<vs.length;i++){if(/ko/i.test(vs[i].lang)){u.voice=vs[i];break;}}
+    u.onend=function(){if(gen===speakGen){vDiag('재생완료(기기)');try{document.dispatchEvent(new CustomEvent('sa-tts-done'));}catch(e){}}};
+    speechSynthesis.speak(u);vDiag('재생중(기기 목소리)');
+  }catch(e){vDiag('기기TTS err');}
+}
 async function speak(text){
   if(!ttsOn){vDiag('off');return;}
   const vid=pickVoice(); if(!vid){vDiag('no-voice-id');return;}
   const my=++speakGen;
   if(curAudio){try{curAudio.pause();}catch(e){}}
+  try{speechSynthesis.cancel();}catch(e){}
   const myTts=my;
   for(let i=0;i<text.length;i+=295){
     if(my!==speakGen)return;
@@ -448,7 +460,7 @@ async function speak(text){
       const r=await fetch(PROXY+'/v1/text-to-speech',{method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({voice_id:vid,text:text.slice(i,i+295),model:'ssfm-v30',language:'kor',output:{audio_format:'mp3'}})});
-      if(!r.ok){vDiag('HTTP '+r.status);return;}
+      if(!r.ok){vDiag('HTTP '+r.status+' → 기기 목소리');deviceSpeak(text.slice(i),my);return;}
       const blob=await r.blob();
       vDiag('수신 '+blob.size+'B');
       const url=URL.createObjectURL(blob);
@@ -460,7 +472,7 @@ async function speak(text){
           vDiag('차단됨('+err.name+') — 화면 탭하면 재생');
           pendingUrl=url;res();});
       });
-    }catch(e){vDiag('fetch-err '+String(e).slice(0,30));return;}
+    }catch(e){vDiag('fetch-err → 기기 목소리');deviceSpeak(text.slice(i),my);return;}
   }
   /* WO-UX-005 Speech 축: 이 발화가 최신 세대로 완주했을 때만 종료 신호 */
   if(myTts===speakGen){try{document.dispatchEvent(new CustomEvent('sa-tts-done'));}catch(e){}}
