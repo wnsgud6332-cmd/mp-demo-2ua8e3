@@ -1316,7 +1316,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||PROXY_BASE);
-  const APP_VER = 'v17.5';
+  const APP_VER = 'v17.6';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -1745,8 +1745,11 @@
         // [P0 지시] Fallback 금지 — 오류를 표시하고 재생하지 않는다 (버그를 숨기지 않는다)
         const L=window.__stLog||{};
         document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_error_no_fallback',d:{err:String(err&&err.message||err).slice(0,80),log:L}}}));
-        showVoiceDebug('❌ VOICE ERROR (재생 중단) '+APP_VER+'\nSlot: '+(L.slot||'?')+' | Voice: '+(L.name||'?')+'\nSearch: '+(L.search||'?')+' | TTS: '+(L.tts||'?')+'\n'+String(err&&err.message||err).slice(0,60));
-        if(typeof showBubble==='function') showBubble('⚠️ 목소리 오류 — 진단 필요');
+        showVoiceDebug('❌ VOICE ERROR → 기기 목소리로 '+APP_VER+'\nSlot: '+(L.slot||'?')+' | Voice: '+(L.name||'?')+'\nSearch: '+(L.search||'?')+' | TTS: '+(L.tts||'?')+'\n'+String(err&&err.message||err).slice(0,60));
+        if(typeof showBubble==='function') showBubble('⚠️ 외부 목소리 오류 — 기기 목소리로 계속합니다');
+        /* [2026-006 B-3] 구 P0 'Fallback 금지' 대체(2026-08-01 GS 승인): 오류는 위에서 전부 표시하되, 침묵은 금지 */
+        document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_engine_fallback',d:{from:'supertone',to:'system',err:String(err&&err.message||err).slice(0,60)}}}));
+        if(typeof speakSystem==='function') speakSystem(text);
       });
       return;
     }
