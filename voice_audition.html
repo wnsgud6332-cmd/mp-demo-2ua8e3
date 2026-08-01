@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MYAIPET 목소리 오디션 v1.0</title>
+<title>MYAIPET 목소리 오디션 v1.1</title>
 <style>
   :root{--bg:#101418;--card:#1a2129;--line:#2a3441;--tx:#e8edf2;--sub:#93a1b0;--acc:#4da3ff;
         --hae:#ffb84d;--ssik:#5dd0a2;--po:#f2919e;--da:#a48cf2;}
@@ -36,7 +36,7 @@
 </head>
 <body>
 <h1>🎙 MYAIPET 목소리 오디션</h1>
-<div class="ver">voice_audition v1.0 · 2026-08-01 · B-5 (Directive 2026-006)</div>
+<div class="ver">voice_audition v1.1 · 2026-08-01 · B-5 (Directive 2026-006)</div>
 
 <div class="panel">
   <h2>① 시연 문장 (탭하면 이 문장을 그 목소리로 읽어줍니다)</h2>
@@ -148,21 +148,24 @@ async function preview(v,btn){
     const r=await fetch(PROXY+'/v1/text-to-speech',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({voice_id:v.id,text:text,model:MODEL,language:'kor',output:{audio_format:'mp3'}})});
-    const ct=(r.headers.get('content-type')||'');
-    let src=null;
-    if(ct.includes('audio')||ct.includes('octet')){
-      src=URL.createObjectURL(await r.blob());
-    }else{
-      const j=await r.json();
-      src=(j.result&&(j.result.audio_download_url||(j.result.audio&&j.result.audio.url)))||j.audio_download_url||j.url||null;
+    if(!r.ok){
+      let msg='HTTP '+r.status;
+      try{msg+=' — '+(await r.text()).slice(0,120);}catch(e){}
+      throw new Error(msg);
     }
-    if(!src) throw new Error('오디오 없음');
+    const blob=await r.blob();               /* 데모 본편과 동일: 통째로 소리로 수신 */
+    if(blob.size<200){                        /* 너무 작으면 오류 응답일 가능성 */
+      let t='';try{t=await blob.text();}catch(e){}
+      throw new Error('응답이 소리가 아님('+blob.size+'B): '+t.slice(0,120));
+    }
+    const src=URL.createObjectURL(blob);
     currentAudio=new Audio(src);
+    currentAudio.onended=()=>URL.revokeObjectURL(src);
     await currentAudio.play();
     playCount++;document.getElementById('count').textContent=playCount;
   }catch(e){
-    alert('재생 실패: '+e.message+'\n(크레딧 잔량 또는 프록시 상태를 확인해 주세요)');
-  }finally{btn.disabled=false;btn.textContent='▶ 들어보기';}
+    alert('재생 실패: '+e.message);
+  }finally{btn.disabled=false;btn.textContent='\u25b6 \ub4e4\uc5b4\ubcf4\uae30';}
 }
 
 document.getElementById('q').addEventListener('input',e=>renderList(e.target.value));
