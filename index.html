@@ -1316,12 +1316,12 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||PROXY_BASE);
-  const APP_VER = 'v17.6';
+  const APP_VER = 'v17.7';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
   const ST_PRESETS = { m:'Kangil', f:'Sua', dog:'Dylan', cat:'Kelsey' }; // [Sprint V1 확정 캐스트]
-  const ST_IDS = {"f": "tc_6699eb5749dfac016c29445c", "m": "tc_68d4b115f0486108a7eefb37", "dog": "tc_672c5f5ce59fac2a48faeaee", "cat": "tc_6763aa69e0158fa7fe2ecdd2"}; // voice_id 직결 — 검색 단계 제거
+  const ST_IDS = {"f": "tc_5ebea14e433bd200073a0dce", "m": "tc_6791c4a4c79515dea68b4a75", "dog": "tc_66aca22c7d31e45ff05ff418", "cat": "tc_685cdfad4027aeec7d097a28"}; // 체험 캐스트 v1: Jiwoo/Logan/Chloe/Cheolhoon (2026-08-02, 무료 약관 정렬 — dog·cat 슬롯은 임시 매핑, A안 라벨 정식화는 본편)
   const ST_MODEL = 'ssfm-30';
   async function resolveStVoice(slot){
     const name=ST_PRESETS[slot], id=ST_IDS[slot];
@@ -1395,7 +1395,7 @@
   // [Sprint V1 STEP 6-8] #vselect — 후보 청취·채점·Top12 Export
   if(location.hash==='#vselect'){
     setTimeout(()=>{
-      const CAND=[{"g": "A", "n": "Sua", "id": "tc_6699eb5749dfac016c29445c"}, {"g": "A", "n": "Daidai", "id": "tc_63a3d9eb4b235ddd6541a79e"}, {"g": "A", "n": "Harper", "id": "tc_673587a063fc41710954ce20"}, {"g": "A", "n": "Billie", "id": "tc_645b39b760386589fd851133"}, {"g": "A", "n": "Azzi", "id": "tc_66596206b7bd6e89c3a2c54e"}, {"g": "A", "n": "Millie", "id": "tc_6359e7f6467f9e240b68292c"}, {"g": "A", "n": "Ella", "id": "tc_62fb679683a541c351dc7c3a"}, {"g": "A", "n": "Ruby", "id": "tc_6296a8ceb958a8ed9610b1df"}, {"g": "A", "n": "Betty", "id": "tc_61d55a1ab8c48f42d69b234f"}, {"g": "A", "n": "Annie", "id": "tc_60db2fccdd71a40a1d3476f8"}, {"g": "B", "n": "Gunwoo", "id": "tc_624cccbcadcd568510764d65"}, {"g": "B", "n": "Hajun", "id": "tc_60db308484130840f23e6ca0"}, {"g": "B", "n": "Siwoo", "id": "tc_6699eb3849dfac016c29444c"}, {"g": "B", "n": "Slushy", "id": "tc_61a6c1b345116a3825caf1cd"}, {"g": "B", "n": "Tommy", "id": "tc_6088209815f2f9881e08e815"}, {"g": "B", "n": "Doughnut", "id": "tc_6075b407b8a5c6f36b877c88"}, {"g": "B", "n": "Moru", "id": "tc_619d7eb59233f1f0771197ed"}, {"g": "B", "n": "Juwan", "id": "tc_69e0462f3e5413d26878521e"}, {"g": "B", "n": "Woony", "id": "tc_69c1f8e4f8842d80fbe7fa4f"}, {"g": "B", "n": "Jackson", "id": "tc_6791c4c4bbcdc04afd3fde2f"}, {"g": "C", "n": "Mongsil", "id": "tc_699d27e0e061695d6ed39bc6"}, {"g": "C", "n": "Audrey", "id": "tc_67e38e6d4600650873ac157c"}, {"g": "C", "n": "Riley", "id": "tc_67db7504d5ebacf7578e68f1"}, {"g": "C", "n": "Kelsey", "id": "tc_6763aa69e0158fa7fe2ecdd2"}, {"g": "C", "n": "Skylar", "id": "tc_67512e8b0b5984173fa04685"}, {"g": "C", "n": "Chase", "id": "tc_67358772bcde863931cb6f40"}, {"g": "C", "n": "Starling", "id": "tc_66bc60339ab2db047154b94e"}, {"g": "C", "n": "Chloe", "id": "tc_66aca22c7d31e45ff05ff418"}, {"g": "C", "n": "Stephanie", "id": "tc_62f223d11643eebf963582f7"}, {"g": "C", "n": "Kelly", "id": "tc_627ae5cd14dc32608fdaffa8"}, {"g": "D", "n": "Larry", "id": "tc_65d84b782b58da07b628d384"}, {"g": "D", "n": "West", "id": "tc_632a757ae7c78a412f5a36c0"}, {"g": "D", "n": "Callum", "id": "tc_69a8e49d2e36ab42260be475"}, {"g": "D", "n": "Janet", "id": "tc_67edd9343da73ae7896e347d"}, {"g": "D", "n": "Doug", "id": "tc_67edd8ff659e800a322a5877"}, {"g": "D", "n": "Nova", "id": "tc_67e38e49771b5511659c4690"}, {"g": "D", "n": "Sylvia", "id": "tc_67d237aac9ac563922580832"}, {"g": "D", "n": "Gus", "id": "tc_67bfc79c0fdd0f534e9567b1"}, {"g": "D", "n": "Oliver", "id": "tc_675932accd1349e1c9aa0c3f"}, {"g": "D", "n": "Dylan", "id": "tc_672c5f5ce59fac2a48faeaee"}, {"g": "A", "n": "Leehyun (기존)", "id": "tc_68ddea1e462b169ddd20b74d"}, {"g": "B", "n": "Kangil (기존)", "id": "tc_68d4b115f0486108a7eefb37"}, {"g": "D", "n": "Eogwool (기존)", "id": "tc_699d27ef573c4c4d91aa411d"}];
+      const CAND=[{"g":"A","n":"Jiwoo","id":"tc_5ebea14e433bd200073a0dce"},{"g":"B","n":"Logan","id":"tc_6791c4a4c79515dea68b4a75"},{"g":"C","n":"Chloe","id":"tc_66aca22c7d31e45ff05ff418"},{"g":"D","n":"Cheolhoon","id":"tc_685cdfad4027aeec7d097a28"}]; /* 체험 캐스트 v1만 유지 — 비체험 43종 명단 제거 (2026-08-02) */
       const TXT='안녕. 오늘 하루는 어땠어? 오늘도 만나서 반가워.';
       const GN={A:'여자아이',B:'남자아이',C:'강아지형',D:'고양이형'};
       const scores=JSON.parse(localStorage.getItem('vsel_scores')||'{}');
