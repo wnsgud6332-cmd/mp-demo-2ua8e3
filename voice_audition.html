@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MYAIPET 목소리 오디션 v1.2</title>
+<title>MYAIPET 목소리 오디션 v1.3</title>
 <style>
   :root{--bg:#101418;--card:#1a2129;--line:#2a3441;--tx:#e8edf2;--sub:#93a1b0;--acc:#4da3ff;
         --hae:#ffb84d;--ssik:#5dd0a2;--po:#f2919e;--da:#a48cf2;}
@@ -36,7 +36,7 @@
 </head>
 <body>
 <h1>🎙 MYAIPET 목소리 오디션</h1>
-<div class="ver">voice_audition v1.2 · 2026-08-01 · B-5 (Directive 2026-006)</div>
+<div class="ver">voice_audition v1.3 · 2026-08-01 · B-5 (Directive 2026-006)</div>
 
 <div class="panel">
   <h2>① 시연 문장 (탭하면 이 문장을 그 목소리로 읽어줍니다)</h2>
@@ -57,7 +57,7 @@
 
 <div class="panel">
   <h2>③ 후보 목록 (API에서 실제 사용 가능한 목소리만 표시)</h2>
-  <input type="search" id="q" placeholder="이름 검색 — 체험 캐스팅: 지우, 로건, 프란츠, 클로이">
+  <input type="search" id="q" placeholder="이름 또는 코드(tc_...)로 검색">
   <div id="status">목록 불러오는 중…</div>
   <div id="list"></div>
 </div>
@@ -119,7 +119,7 @@ async function fetchVoices(){
 function renderList(q){
   const box=document.getElementById('list');
   const qq=q.trim().toLowerCase();
-  const shown=VOICES.filter(v=>!qq||v.name.toLowerCase().includes(qq)).slice(0,60);
+  const shown=VOICES.filter(v=>!qq||v.name.toLowerCase().includes(qq)||String(v.id).toLowerCase().includes(qq)).slice(0,60);
   box.innerHTML='';
   for(const v of shown){
     const d=document.createElement('div');d.className='voice';
