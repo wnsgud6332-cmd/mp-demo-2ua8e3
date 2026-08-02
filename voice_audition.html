@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MYAIPET 목소리 오디션 v1.1</title>
+<title>MYAIPET 목소리 오디션 v1.2</title>
 <style>
   :root{--bg:#101418;--card:#1a2129;--line:#2a3441;--tx:#e8edf2;--sub:#93a1b0;--acc:#4da3ff;
         --hae:#ffb84d;--ssik:#5dd0a2;--po:#f2919e;--da:#a48cf2;}
@@ -36,7 +36,7 @@
 </head>
 <body>
 <h1>🎙 MYAIPET 목소리 오디션</h1>
-<div class="ver">voice_audition v1.1 · 2026-08-01 · B-5 (Directive 2026-006)</div>
+<div class="ver">voice_audition v1.2 · 2026-08-01 · B-5 (Directive 2026-006)</div>
 
 <div class="panel">
   <h2>① 시연 문장 (탭하면 이 문장을 그 목소리로 읽어줍니다)</h2>
@@ -57,7 +57,7 @@
 
 <div class="panel">
   <h2>③ 후보 목록 (API에서 실제 사용 가능한 목소리만 표시)</h2>
-  <input type="search" id="q" placeholder="이름 검색 — 추천 시작점: 하영, 호빈, 태지, 수아(Sua)">
+  <input type="search" id="q" placeholder="이름 검색 — 체험 캐스팅: 지우, 로건, 프란츠, 클로이">
   <div id="status">목록 불러오는 중…</div>
   <div id="list"></div>
 </div>
@@ -74,7 +74,7 @@ function renderCast(){
   const map=loadMap();
   for(const s of ['f','m','warm','calm']){
     const el=document.getElementById('cur-'+s);
-    el.textContent=(map[s]&&map[s].name)?('▶ '+map[s].name):'미정';
+    el.textContent=(map[s]&&map[s].name)?('▶ '+map[s].name+' · '+String(map[s].id||'').slice(0,26)):'미정';
   }
 }
 function assign(slot,id,name){
@@ -123,7 +123,7 @@ function renderList(q){
   box.innerHTML='';
   for(const v of shown){
     const d=document.createElement('div');d.className='voice';
-    d.innerHTML='<div class="vtop"><div class="vname">'+v.name+'</div>'+
+    d.innerHTML='<div class="vtop"><div class="vname">'+v.name+' <span style="color:var(--sub);font-size:11px">'+String(v.id).slice(0,26)+'</span></div>'+
       '<button class="play">▶ 들어보기</button></div>'+
       '<div class="assign">'+
       '<button class="b-f">☀️ 햇살이로</button>'+
