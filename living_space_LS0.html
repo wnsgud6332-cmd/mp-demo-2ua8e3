@@ -274,7 +274,7 @@ html.pa-diag #paBadge{display:block}
 <div id="conv"></div>
 <div id="inputBar">
   <button class="roundBtn" id="micBtn">🎙</button>
-  <input id="chatInput" placeholder="미르에게 말을 걸어보세요…">
+  <input id="chatInput" placeholder="말을 걸어보세요…">
   <button class="roundBtn" id="sendBtn">↑</button>
 </div>
 
@@ -797,8 +797,8 @@ ci.addEventListener('focus',()=>{typingMode=true;
 ci.addEventListener('blur',()=>{typingMode=false;
   document.documentElement.classList.remove('typingNow');petTilt.style.transform='';});
 /* 입력창 문구 로테이션 (지시서 3장) */
-const holders=['미르에게 말을 걸어보세요…','오늘은 어떤 이야기를 들려줄까요?'];let hi=0;
-setInterval(()=>{hi=(hi+1)%holders.length;document.getElementById('chatInput').placeholder=holders[hi];},8000);
+const holders=()=>[(((window.IDENT&&window.IDENT.petName)?window.IDENT.petName+'에게 ':'')+'말을 걸어보세요…'),'오늘은 어떤 이야기를 들려줄까요?'];let hi=0;
+setInterval(()=>{const hs=holders();hi=(hi+1)%hs.length;document.getElementById('chatInput').placeholder=hs[hi];},8000);
 
 /* ====== Memory Card ====== */
 const mc=document.getElementById('memoryCard');
@@ -1199,7 +1199,7 @@ function readBrainGreeting(name){
     }
   }catch(e){}
   /* 폴백: 본판 v16.0 PRS-001D M1 확정 인사 문구의 재표기(렌더러는 생성하지 않는다) */
-  return '안녕! 나는 '+name+'야. 앞으로 같이 시간을 보내게 될 것 같아 — 만나서 반가워. 먼저 네 이야기를 조금 들려줄래?';
+  return '안녕! 나는 '+name+'야. 만나서 반가워! 너는 이름이 뭐야?';
 }
 function splitGreeting(g){
   const m=g.match(/^(.{1,14}?[!.?…~])[ ]*/);
