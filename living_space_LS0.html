@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.4.2</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.5.0</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -421,7 +421,8 @@ function bubbleMorph(row,newText,asAnswer){
 }
 /* ====== EC-02 Stage 1: 두뇌·목소리 연결 ======
    본판 v17.5 호출 규격 재사용(mp-proxy = LLM Adapter 상당). Engine Object 무접촉.
-   본판 localStorage는 읽기 전용(st_slot, st_voice_map) — 절대 쓰지 않는다. */
+   본판 localStorage 계약 개정판(GS 승인 2026-08-03, LS=주무대): facts 필드만 추가 가능(중복 제거·40건 상한 — 본판과 동일 규칙).
+   정체성(petName·userName)·레벨·경험치·기타 필드는 여전히 불가침. st_slot·st_voice_map은 읽기 전용 유지. */
 const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
 /* ====== WO-A (Directive 2026-006): 최소 기억 연결 — persona vLS-4.4.0 ======
    A-1 주입 선별: 본판 기억지도(myaipet-demo-v10, 읽기 전용)에서 최근 20건 스냅샷 — 세션당 1회 고정(캐시 안정성)
@@ -429,7 +430,7 @@ const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
    A-3 재진입 회상: 입장 시 저장 기억 기반 선(先)인사 — recallGreet()
    A-4 프롬프트 버전 주석: PROMPT_VER — 고정 블록 첫 줄 표기
    ③B 그릇(GS 확정 2026-08-03): 슬롯별 말투 분기 — A안 확정 형용사만 사용, 성격 문안 확장 자리. 반말/존댓말 배정은 인터뷰 후. */
-const PROMPT_VER='vLS-4.4.2';
+const PROMPT_VER='vLS-4.5.0';
 const PERSONA_PRESETS={
   f:{label:'햇살이',tone:'밝고 명랑한 기운으로'},
   m:{label:'씩씩이',tone:'또랑또랑 기운찬 기세로'},
@@ -491,6 +492,33 @@ async function recallGreet(){
     if(row){BL.setState(row,'holding');setTimeout(()=>BL.destroy(row),Math.max(25000,BL.readMs(t)+5000));}
     speak(t);
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'recall_greet',d:{ver:PROMPT_VER,facts:MEMSNAP.count}}}));
+  }catch(e){}
+}
+/* WO-A2-2: 기억 쓰기 — 계약 개정판. 대화에서 사실 추출 → 본판 facts에만 추가 */
+const LS_CATS=['가족·사람','건강','습관·일상','좋아하는 것','일·가게','장소','기타'];
+async function extractAndStore(userText){
+  try{
+    const r=await fetch(PROXY+'/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,
+        system:'사용자 발화에서 장기적으로 기억할 가치가 있는 새 사실만 뽑아라. 최대 2개, 없으면 빈 배열. JSON 배열만 출력하고 다른 텍스트 금지: [{"fact":"사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}]',
+        messages:[{role:'user',content:userText}]})});
+    if(!r.ok)return;
+    const d=await r.json();
+    const raw=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('').trim();
+    let arr;try{arr=JSON.parse(raw.split('```json').join('').split('```').join('').trim());}catch(e){return;}
+    if(!Array.isArray(arr)||!arr.length)return;
+    const st=JSON.parse(localStorage.getItem('myaipet-demo-v10')||'null');
+    if(!st||!Array.isArray(st.facts))return; /* 탄생 전이면 쓰지 않는다 — 정체성 주권은 본판 */
+    let added=0;
+    arr.slice(0,2).forEach(x=>{
+      const t=x&&x.fact&&String(x.fact).trim();if(!t)return;
+      const c=LS_CATS.includes(x.category)?x.category:'기타';
+      if(st.facts.some(f=>f&&f.t===t))return;
+      st.facts.push({t:t,c:c});added++;});
+    if(!added)return;
+    if(st.facts.length>40)st.facts=st.facts.slice(-40);
+    localStorage.setItem('myaipet-demo-v10',JSON.stringify(st));
+    idLog('기억: '+added+'건 저장(총 '+st.facts.length+'건)');
   }catch(e){}
 }
 const hist=[];
@@ -571,6 +599,7 @@ async function brain(userText){
     hist.push({role:'assistant',content:reply});
     bubble('pet',reply);
     speak(reply);
+    extractAndStore(userText); /* WO-A2-2: 배경 기억 추출 — 실패해도 대화 무영향 */
   }catch(e){
     th.remove();
     bubble('pet','(연습 모드) 지금은 생각이 잘 안 닿아… 잠시 뒤에 다시 말 걸어줘.');
@@ -782,7 +811,30 @@ function setMode(m){mode=m;
   document.getElementById('micBtn').style.display=(m==='A')?'flex':'none';}
 document.getElementById('btnModeA').onclick=()=>setMode('A');
 document.getElementById('btnModeB').onclick=()=>setMode('B');
-document.getElementById('micBtn').onclick=()=>bubble('pet','(A안) 듣고 있어요 — 말씀하세요.');
+/* WO-A2-1 (LS 주무대 확정 2026-08-03): 본판 STT 이식 — 스텁 교체. iOS 생성 실패 격리 포함 */
+let lsRecognizer=null,lsRecognizing=false;
+try{
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(SR){
+    lsRecognizer=new SR();
+    lsRecognizer.lang='ko-KR';lsRecognizer.interimResults=false;
+    lsRecognizer.onresult=e=>{const t=e.results[0][0].transcript;
+      lsRecognizing=false;const mb=document.getElementById('micBtn');mb.style.background='';
+      const el=document.getElementById('chatInput');el.value=t;
+      document.getElementById('sendBtn').onclick();};
+    lsRecognizer.onerror=e=>{lsRecognizing=false;document.getElementById('micBtn').style.background='';
+      if(e.error==='not-allowed'||e.error==='service-not-allowed')bubble('pet','마이크 사용을 허용해줘야 목소리를 들을 수 있어. 주소창 옆 자물쇠에서 허용해줄래?');
+      else if(e.error==='no-speech')bubble('pet','소리를 못 들었어. 🎙를 다시 누르고 말해줘.');};
+    lsRecognizer.onend=()=>{lsRecognizing=false;document.getElementById('micBtn').style.background='';};
+  }
+}catch(e){lsRecognizer=null;}
+document.getElementById('micBtn').onclick=()=>{
+  if(!lsRecognizer){bubble('pet','이 브라우저는 음성 입력이 안 돼. 크롬으로 열거나 글로 이야기해줘.');return;}
+  if(lsRecognizing){try{lsRecognizer.stop();}catch(e){}return;}
+  try{lsRecognizer.start();lsRecognizing=true;
+    document.getElementById('micBtn').style.background='rgba(255,120,120,.35)';}
+  catch(e){bubble('pet','마이크를 켤 수 없었어. 글로 이야기해줘.');}
+};
 document.getElementById('petHit').onclick=()=>{
   petStage.classList.remove('petReact');void petStage.offsetWidth;petStage.classList.add('petReact');
   setTimeout(()=>bubble('pet',mode==='B'?'(B안) 불렀어? 이야기하자.':'히힛, 간지러워.'),350);};
