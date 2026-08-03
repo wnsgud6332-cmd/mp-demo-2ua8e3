@@ -1316,12 +1316,12 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||PROXY_BASE);
-  const APP_VER = 'v17.7';
+  const APP_VER = 'v17.8';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
   const ST_PRESETS = { m:'Kangil', f:'Sua', dog:'Dylan', cat:'Kelsey' }; // [Sprint V1 확정 캐스트]
-  const ST_IDS = {"f": "tc_5ebea14e433bd200073a0dce", "m": "tc_6791c4a4c79515dea68b4a75", "dog": "tc_66aca22c7d31e45ff05ff418", "cat": "tc_685cdfad4027aeec7d097a28"}; // 체험 캐스트 v1: Jiwoo/Logan/Chloe/Cheolhoon (2026-08-02, 무료 약관 정렬 — dog·cat 슬롯은 임시 매핑, A안 라벨 정식화는 본편)
+  const ST_IDS = {"f": "tc_5ebea14e433bd200073e0dce", "m": "tc_6791c4a4c79515dea68b4a75", "dog": "tc_66aca22c7d31e45ff05ff418", "cat": "tc_685cdfad4027aeec7d097a28"}; // 체험 캐스트 v1: Jiwoo/Logan/Chloe/Cheolhoon (2026-08-02, 무료 약관 정렬 — dog·cat 슬롯은 임시 매핑, A안 라벨 정식화는 본편)
   const ST_MODEL = 'ssfm-30';
   async function resolveStVoice(slot){
     const name=ST_PRESETS[slot], id=ST_IDS[slot];
@@ -1395,7 +1395,7 @@
   // [Sprint V1 STEP 6-8] #vselect — 후보 청취·채점·Top12 Export
   if(location.hash==='#vselect'){
     setTimeout(()=>{
-      const CAND=[{"g":"A","n":"Jiwoo","id":"tc_5ebea14e433bd200073a0dce"},{"g":"B","n":"Logan","id":"tc_6791c4a4c79515dea68b4a75"},{"g":"C","n":"Chloe","id":"tc_66aca22c7d31e45ff05ff418"},{"g":"D","n":"Cheolhoon","id":"tc_685cdfad4027aeec7d097a28"}]; /* 체험 캐스트 v1만 유지 — 비체험 43종 명단 제거 (2026-08-02) */
+      const CAND=[{"g":"A","n":"Jiwoo","id":"tc_5ebea14e433bd200073e0dce"},{"g":"B","n":"Logan","id":"tc_6791c4a4c79515dea68b4a75"},{"g":"C","n":"Chloe","id":"tc_66aca22c7d31e45ff05ff418"},{"g":"D","n":"Cheolhoon","id":"tc_685cdfad4027aeec7d097a28"}]; /* 체험 캐스트 v1만 유지 — 비체험 43종 명단 제거 (2026-08-02) */
       const TXT='안녕. 오늘 하루는 어땠어? 오늘도 만나서 반가워.';
       const GN={A:'여자아이',B:'남자아이',C:'강아지형',D:'고양이형'};
       const scores=JSON.parse(localStorage.getItem('vsel_scores')||'{}');
