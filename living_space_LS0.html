@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.3.5</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.4.0</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -423,7 +423,71 @@ function bubbleMorph(row,newText,asAnswer){
    본판 v17.5 호출 규격 재사용(mp-proxy = LLM Adapter 상당). Engine Object 무접촉.
    본판 localStorage는 읽기 전용(st_slot, st_voice_map) — 절대 쓰지 않는다. */
 const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
-const personaFor=n=>'너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마.';
+/* ====== WO-A (Directive 2026-006): 최소 기억 연결 — persona vLS-4.4.0 ======
+   A-1 주입 선별: 본판 기억지도(myaipet-demo-v10, 읽기 전용)에서 최근 20건 스냅샷 — 세션당 1회 고정(캐시 안정성)
+   A-2 캐시 블록: system = [고정 블록(버전주석+페르소나+기억, cache_control)] + [가변 블록(세션 맥락)]
+   A-3 재진입 회상: 입장 시 저장 기억 기반 선(先)인사 — recallGreet()
+   A-4 프롬프트 버전 주석: PROMPT_VER — 고정 블록 첫 줄 표기
+   ③B 그릇(GS 확정 2026-08-03): 슬롯별 말투 분기 — A안 확정 형용사만 사용, 성격 문안 확장 자리. 반말/존댓말 배정은 인터뷰 후. */
+const PROMPT_VER='vLS-4.4.0';
+const PERSONA_PRESETS={
+  f:{label:'햇살이',tone:'밝고 명랑한 기운으로'},
+  m:{label:'씩씩이',tone:'또랑또랑 기운찬 기세로'},
+  dog:{label:'포근이',tone:'따뜻하고 느긋한 온도로'},
+  cat:{label:'다정이',tone:'조곤조곤 차분한 결로'}
+};
+function loadMemorySnapshot(){
+  try{
+    const st=JSON.parse(localStorage.getItem('myaipet-demo-v10')||'{}');
+    const facts=(Array.isArray(st.facts)?st.facts:[]).slice(-20);
+    const cats={};facts.forEach(f=>{if(f&&f.t){const c=f.c||'기타';(cats[c]=cats[c]||[]).push(f.t);}});
+    const digest=Object.keys(cats).map(c=>c+': '+cats[c].join(', ')).join(' / ');
+    const topics=(Array.isArray(st.topicHistory)?st.topicHistory:[]).slice(-3);
+    return {digest:digest, topics:topics, days:st.daysTogether||1, count:facts.length};
+  }catch(e){return {digest:'',topics:[],days:1,count:0};}
+}
+const MEMSNAP=loadMemorySnapshot();
+function personaText(n){
+  const slot=localStorage.getItem('st_slot')||'f';
+  const p=PERSONA_PRESETS[slot]||PERSONA_PRESETS.f;
+  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마.';
+}
+function buildSystemBlocks(n){
+  const fixed=[
+    '[persona '+PROMPT_VER+' · 고정 블록]',
+    personaText(n),
+    MEMSNAP.count?('함께 지내며 알게 된 것들(기억): '+MEMSNAP.digest):'아직 함께 쌓은 기억이 없다.',
+    '기억은 "저장했다/기억해뒀다"라고 말하지 않는다 — 대화 중 자연스럽게 떠올려 언급한다("지난번에 ~라고 했잖아" 방식).'
+  ].join('\n');
+  const variable=[
+    '[세션 맥락 · 가변 블록]',
+    '함께한 지 '+MEMSNAP.days+'일째.'+(MEMSNAP.topics.length?(' 지난 대화 주제: '+MEMSNAP.topics.join(' → ')):'')
+  ].join('\n');
+  return [
+    {type:'text',text:fixed,cache_control:{type:'ephemeral'}},
+    {type:'text',text:variable}
+  ];
+}
+async function recallGreet(){
+  try{
+    if(!MEMSNAP.count)return;
+    if(sessionStorage.getItem('ls_recall_done')==='1')return;
+    sessionStorage.setItem('ls_recall_done','1');
+    const pn=(window.IDENT&&window.IDENT.petName)||'미르';
+    const ask='(사용자가 방금 다시 들어왔다. 기억 목록에서 하나만 골라 자연스럽게 언급하며 1~2문장으로 먼저 인사해라. 목록을 나열하지 말고, 기억했다/저장했다는 말도 하지 마라.)';
+    const r=await fetch(PROXY+'/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,system:buildSystemBlocks(pn),
+        messages:[{role:'user',content:ask}]})});
+    if(!r.ok)return;
+    const d=await r.json();
+    const t=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim();
+    if(!t)return;
+    hist.push({role:'user',content:ask});
+    hist.push({role:'assistant',content:t});
+    bubble('pet',t);speak(t);
+    document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'recall_greet',d:{ver:PROMPT_VER,facts:MEMSNAP.count}}}));
+  }catch(e){}
+}
 const hist=[];
 let ttsOn = localStorage.getItem('ls_tts')!=='off';
 function pickVoice(){
@@ -494,7 +558,7 @@ async function brain(userText){
   try{
     const r=await fetch(PROXY+'/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,system:personaFor((window.IDENT&&window.IDENT.petName)||'미르'),messages:hist})});
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,system:buildSystemBlocks((window.IDENT&&window.IDENT.petName)||'미르'),messages:hist})});
     if(!r.ok)throw new Error('http '+r.status);
     const d=await r.json();
     const reply=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim()||'…';
@@ -1114,7 +1178,7 @@ function IdentityBoot(){  // 부팅 분기 (WO-IMPL-003/004/005/006)
   const v=IdentityGateway.assess();
   idLog('Gateway 판정: '+v.state+' → '+v.nextAction);
   switch(v.nextAction){
-    case 'ENTER_LIVING_SPACE': applyIdentity(IdentityAdapter.load()); idLog('입장: Existing User'); break;
+    case 'ENTER_LIVING_SPACE': applyIdentity(IdentityAdapter.load()); idLog('입장: Existing User'); recallGreet(); break;
     case 'RECORD_FREEZE_ONCE': IdentityAdapter.recordFreeze(); IdentityBoot(); break;
     case 'BIRTH_REQUIRED': case 'RUN_GOLDEN_BRAIN_BIRTH': IdentityAdapter.openBirth(); break;
     case 'MIGRATION_CONTRACT': idLog('Migration Contract stub — Engine 미구현(계획대로, WO-IMPL-006)'); break;
