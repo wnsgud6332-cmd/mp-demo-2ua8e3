@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.5.0</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.6.0</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -430,7 +430,7 @@ const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
    A-3 재진입 회상: 입장 시 저장 기억 기반 선(先)인사 — recallGreet()
    A-4 프롬프트 버전 주석: PROMPT_VER — 고정 블록 첫 줄 표기
    ③B 그릇(GS 확정 2026-08-03): 슬롯별 말투 분기 — A안 확정 형용사만 사용, 성격 문안 확장 자리. 반말/존댓말 배정은 인터뷰 후. */
-const PROMPT_VER='vLS-4.5.0';
+const PROMPT_VER='vLS-4.6.0';
 const PERSONA_PRESETS={
   f:{label:'햇살이',tone:'밝고 명랑한 기운으로'},
   m:{label:'씩씩이',tone:'또랑또랑 기운찬 기세로'},
@@ -451,7 +451,7 @@ const MEMSNAP=loadMemorySnapshot();
 function personaText(n){
   const slot=localStorage.getItem('st_slot')||'f';
   const p=PERSONA_PRESETS[slot]||PERSONA_PRESETS.f;
-  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마.';
+  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마. 아직 서로 잘 모르는 사이라면(기억이 없거나 적다면) 대화 초반에 다음 다섯 가지를 한 번에 하나씩만, 취조하듯 몰아붙이지 말고 대화 흐름에 실어 자연스럽게 물어봐: (1)상대를 뭐라고 부르면 좋을지 (2)가족이나 같이 사는 사람 (3)아침에 일어나면 제일 먼저 뭘 하는지 (4)매일 챙겨 먹는 약이나 꼭 하는 일 (5)요즘 제일 좋아하는 것. 상대가 답을 꺼리는 눈치면 그 질문은 바로 접고 다른 이야기로 넘어가.';
 }
 function buildSystemBlocks(n){
   const fixed=[
@@ -472,7 +472,18 @@ function buildSystemBlocks(n){
 async function recallGreet(){
   try{
     idLog('회상: 기억 '+MEMSNAP.count+'건 로드');
-    if(!MEMSNAP.count){idLog('회상: 기억 0건 — 인사 생략(본판과 같은 기기·브라우저인지 확인)');return;}
+    if(!MEMSNAP.count){
+      /* v4.6.0 첫만남 인사: 기억 0건이면 침묵 대신 펫이 먼저 호칭을 묻는다(고정 문장 — 두뇌 실패에도 안전) */
+      idLog('회상: 기억 0건 — 첫만남 인사(v4.6.0)');
+      const pn0=(window.IDENT&&window.IDENT.petName)||'미르';
+      const g0='왔구나! 반가워. 있잖아, 너를 뭐라고 부르면 좋을까?';
+      hist.push({role:'user',content:'(처음 만난 사용자가 들어왔다. 네가 먼저 인사했다.)'});
+      hist.push({role:'assistant',content:g0});
+      const row0=bubble('pet',g0,{searching:true});
+      if(row0){BL.setState(row0,'holding');setTimeout(()=>BL.destroy(row0),Math.max(25000,BL.readMs(g0)+5000));}
+      speak(g0);
+      document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'first_greet',d:{ver:PROMPT_VER}}}));
+      return;}
     const pn=(window.IDENT&&window.IDENT.petName)||'미르';
     idLog('회상: 인사 생성 요청 중…');
     const ask='(사용자가 방금 다시 들어왔다. 기억 목록에서 하나만 골라 자연스럽게 언급하며 1~2문장으로 먼저 인사해라. 목록을 나열하지 말고, 기억했다/저장했다는 말도 하지 마라.)';
