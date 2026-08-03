@@ -404,13 +404,13 @@
     <!-- 목소리 선택 (이름짓기 다음 단계) -->
     <div id="voicePick" style="position:absolute;inset:0;background:rgba(10,14,24,.62);z-index:40;display:none;align-items:center;justify-content:center;">
       <div style="background:var(--paper);border-radius:22px;padding:24px 20px;width:min(340px,86%);text-align:center;">
-        <div style="font-weight:800;font-size:19px;color:#2b2118;margin-bottom:4px;">목소리를 골라주세요</div>
+        <div style="font-weight:800;font-size:19px;color:#2b2118;margin-bottom:4px;">우리 아이는 어떤 목소리로 태어날까요?</div>
         <div style="font-size:12px;color:#7a6f5d;margin-bottom:12px;">누르면 들어볼 수 있어요</div>
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <button class="vpBtn" data-v="f" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🐰 여자아이 목소리</button>
-          <button class="vpBtn" data-v="m" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🧒 남자아이 목소리</button>
-          <button class="vpBtn" data-v="dog" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🐶 멍멍이 목소리</button>
-          <button class="vpBtn" data-v="cat" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🐱 냥옹이 목소리</button>
+          <button class="vpBtn" data-v="f" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">☀️ 햇살이 — 밝고 명랑한</button>
+          <button class="vpBtn" data-v="m" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">💪 씩씩이 — 또랑또랑 기운찬</button>
+          <button class="vpBtn" data-v="dog" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🧣 포근이 — 따뜻하고 느긋한</button>
+          <button class="vpBtn" data-v="cat" style="border:2px solid #e0d6c2;border-radius:12px;padding:12px;background:#fff;font-size:15px;cursor:pointer;font-family:inherit;">🌙 다정이 — 조곤조곤 차분한</button>
         </div>
         <button id="voiceStartBtn" disabled style="margin-top:14px;width:100%;border:none;border-radius:12px;padding:13px;background:#cabfa8;color:#fff;font-weight:800;font-size:16px;cursor:pointer;font-family:inherit;">이 목소리로 시작</button>
       </div>
@@ -1316,7 +1316,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||PROXY_BASE);
-  const APP_VER = 'v17.8';
+  const APP_VER = 'v17.9';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
