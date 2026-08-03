@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.4.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.4.2</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -429,7 +429,7 @@ const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
    A-3 재진입 회상: 입장 시 저장 기억 기반 선(先)인사 — recallGreet()
    A-4 프롬프트 버전 주석: PROMPT_VER — 고정 블록 첫 줄 표기
    ③B 그릇(GS 확정 2026-08-03): 슬롯별 말투 분기 — A안 확정 형용사만 사용, 성격 문안 확장 자리. 반말/존댓말 배정은 인터뷰 후. */
-const PROMPT_VER='vLS-4.4.1';
+const PROMPT_VER='vLS-4.4.2';
 const PERSONA_PRESETS={
   f:{label:'햇살이',tone:'밝고 명랑한 기운으로'},
   m:{label:'씩씩이',tone:'또랑또랑 기운찬 기세로'},
@@ -470,18 +470,19 @@ function buildSystemBlocks(n){
 }
 async function recallGreet(){
   try{
-    if(!MEMSNAP.count)return;
-    if(sessionStorage.getItem('ls_recall_done')==='1')return;
-    sessionStorage.setItem('ls_recall_done','1');
+    idLog('회상: 기억 '+MEMSNAP.count+'건 로드');
+    if(!MEMSNAP.count){idLog('회상: 기억 0건 — 인사 생략(본판과 같은 기기·브라우저인지 확인)');return;}
     const pn=(window.IDENT&&window.IDENT.petName)||'미르';
+    idLog('회상: 인사 생성 요청 중…');
     const ask='(사용자가 방금 다시 들어왔다. 기억 목록에서 하나만 골라 자연스럽게 언급하며 1~2문장으로 먼저 인사해라. 목록을 나열하지 말고, 기억했다/저장했다는 말도 하지 마라.)';
     const r=await fetch(PROXY+'/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,system:buildSystemBlocks(pn),
         messages:[{role:'user',content:ask}]})});
-    if(!r.ok)return;
+    if(!r.ok){idLog('회상: 두뇌 응답 실패 HTTP '+r.status+' — 인사 생략');return;}
     const d=await r.json();
     const t=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim();
-    if(!t)return;
+    if(!t){idLog('회상: 빈 응답 — 인사 생략');return;}
+    idLog('회상: 인사 표시 완료');
     hist.push({role:'user',content:ask});
     hist.push({role:'assistant',content:t});
     /* v4.4.1: 첫 인사는 TTS 차단(자동재생 정책) 시 발화신호 오작동으로 2.7초만에 증발 →
