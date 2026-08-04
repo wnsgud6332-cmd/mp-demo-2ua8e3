@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.4</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.5</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -350,7 +350,7 @@ for(let i=0;i<12;i++){const m=document.createElement('div');m.className='mote';
 const conv=document.getElementById('conv');
 function stampNow(){const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 const BL={pendingUsers:[],ttsWaiters:[],
-  readMs(t){return Math.min(45000, 8000 + String(t||'').length*150);},
+  readMs(t){return Math.min(90000, 12000 + String(t||'').length*250);}, /* [v4.8.5] 어르신 읽기 속도 기준 상향(조카 피드백: 너무 빨리 사라짐) */
   setState(row,st){row.dataset.state=st;},
   destroy(row){if(!row||row.dataset.state==='fadeout'||row.dataset.state==='destroyed')return;
     this.setState(row,'fadeout');row.classList.add('fade');
