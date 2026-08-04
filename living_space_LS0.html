@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.5</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.6</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -382,7 +382,8 @@ function bubble(kind,text,opt){
     const born=Date.now();
     row._answered=null;
     row._resolveUser=()=>{ if(row._answered==null)return;
-      const dieAt=Math.max(born+8000, row._answered+2000);
+      /* [v4.8.6] 질문은 답변과 짝으로 산다 — 답변 읽기 시간 + 여유만큼 함께 유지 */
+      const dieAt=Math.max(born+8000, row._answered+(row._holdMs||2000)+15000);
       setTimeout(()=>BL.destroy(row), Math.max(0,dieAt-Date.now()));};
     BL.pendingUsers.push(row);
     return row;
@@ -395,14 +396,14 @@ function bubble(kind,text,opt){
 function petAnswerLifecycle(row,textShown){
   /* Context: 이 답변이 대기 중 질문들을 해소 → 질문 삭제 타이머 가동 */
   const now=Date.now();
-  BL.pendingUsers.forEach(u=>{if(u._answered==null){u._answered=now;u._resolveUser();}});
-  BL.pendingUsers=BL.pendingUsers.filter(u=>u._answered==null);
   const rMs=BL.readMs(textShown);
+  BL.pendingUsers.forEach(u=>{if(u._answered==null){u._answered=now;u._holdMs=rMs;u._resolveUser();}});
+  BL.pendingUsers=BL.pendingUsers.filter(u=>u._answered==null);
   if(ttsOn){
-    /* Speech: TTS 종료 + 2초. Timer는 최후 보루(max(8s,읽기시간)+15s 상한 가드) */
+    /* [v4.8.6] Speech: TTS 종료 후에도 읽기 시간만큼 유지(듣고 나서 눈으로 다시 읽는 시간) */
     BL.setState(row,'speaking');
     let done=false;const finish=()=>{if(done)return;done=true;
-      BL.setState(row,'holding');setTimeout(()=>BL.destroy(row),2000);};
+      BL.setState(row,'holding');setTimeout(()=>BL.destroy(row),Math.max(15000,rMs));};
     BL.ttsWaiters.push(finish);
     setTimeout(finish, rMs+15000); /* 가드: Speech 신호 유실 시에도 결국 정리 */
   }else{
