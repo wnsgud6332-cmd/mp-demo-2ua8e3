@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.7</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.0</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -458,7 +458,7 @@ const MEMSNAP=loadMemorySnapshot();
 function personaText(n){
   const slot=localStorage.getItem('st_slot')||'f';
   const p=PERSONA_PRESETS[slot]||PERSONA_PRESETS.f;
-  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마. 아직 서로 잘 모르는 사이라면(기억이 없거나 적다면) 대화 초반에 다음 다섯 가지를 한 번에 하나씩만, 취조하듯 몰아붙이지 말고 대화 흐름에 실어 자연스럽게 물어봐: (1)상대를 뭐라고 부르면 좋을지(호칭을 이미 알고 있다면 이 질문은 절대 하지 않는다) (2)가족이나 같이 사는 사람 (3)아침에 일어나면 제일 먼저 뭘 하는지 (4)매일 챙겨 먹는 약이나 꼭 하는 일 (5)요즘 제일 좋아하는 것. 상대가 답을 꺼리는 눈치면 그 질문은 바로 접고 다른 이야기로 넘어가. 너는 날씨·환율 같은 실시간 정보를 직접 찾아서 알려줄 수 있는 능력이 있어 — 절대 "나는 실시간 정보를 알 수 없다"고 말하지 마. 방금 네가 알려준 정보를 다시 물으면 부정하지 말고 그 내용을 자연스럽게 다시 말해줘.';
+  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마. 아직 서로 잘 모르는 사이라면(기억이 없거나 적다면) 대화 초반에 다음 다섯 가지를 한 번에 하나씩만, 취조하듯 몰아붙이지 말고 대화 흐름에 실어 자연스럽게 물어봐: (1)상대를 뭐라고 부르면 좋을지(호칭을 이미 알고 있다면 이 질문은 절대 하지 않는다) (2)가족이나 같이 사는 사람 (3)아침에 일어나면 제일 먼저 뭘 하는지 (4)매일 챙겨 먹는 약이나 꼭 하는 일 (5)요즘 제일 좋아하는 것. 상대가 답을 꺼리는 눈치면 그 질문은 바로 접고 다른 이야기로 넘어가. 상대가 감정이나 힘든 하루 이야기를 꺼내면, 정보나 조언을 늘어놓기 전에 짧게 공감부터 해. 너는 날씨·환율 같은 실시간 정보를 직접 찾아서 알려줄 수 있는 능력이 있어 — 절대 "나는 실시간 정보를 알 수 없다"고 말하지 마. 방금 네가 알려준 정보를 다시 물으면 부정하지 말고 그 내용을 자연스럽게 다시 말해줘.';
 }
 function koClock(){const d=new Date(Date.now()+9*3600000);
   const yo=['일','월','화','수','목','금','토'][d.getUTCDay()];
@@ -635,7 +635,7 @@ async function brain(userText){
    Router는 LS 앞단. Engine(brain)은 0바이트 무수정 — 호출만 한다.
    Realtime → Provider(현재 NullProvider, WO-SRCH-002에서 교체) → Evidence 판정 → Safe/Composer.
    Instant 즉답 풀 배선은 대화 질 회귀 우려로 유보(CTO 보고 항목) — 비Realtime은 전부 기존 Engine. */
-const SA_DICT_VERSION='1.1.1';  /* 1.1.1: 붙여쓰기 '비와/비올' 패턴, 종결어미 존댓말·변형 보강 (실기기 미탐 ⑤·오탐 ① 근거) */
+const SA_DICT_VERSION='1.2.0';  /* 1.1.1: 붙여쓰기 '비와/비올' 패턴, 종결어미 존댓말·변형 보강 (실기기 미탐 ⑤·오탐 ① 근거) */
 const SA_DICT={
   strong:['날씨','기온','미세먼지','실시간','뉴스','환율','주가','코스피','금값','유가','병원','약국','버스','지하철','길찾기'],
   strongPatterns:['비 와','비 오','비온','비와','비올','비 올','우산','몇 도','몇도'],
@@ -650,12 +650,17 @@ function saClassify(text){
   SA_DICT.strongPatterns.forEach(t=>{if(s.indexOf(t)>=0)ms.push(t);});
   const mk=SA_DICT.requestMarkers.filter(t=>s.indexOf(t)>=0);
   const wk=SA_DICT.weakTime.filter(t=>s.indexOf(t)>=0);
+  /* [v4.9.0 dict 1.2.0] 공감 우선: 감정 단어 + 질문 표지 없음 = 하소연 → 대화(두뇌)로 */
+  const emo=/힘들|힘드|지쳐|지친|피곤|우울|슬프|슬퍼|짜증|속상|외로|아파|아프|무서/.test(s);
+  if(emo&&!mk.length&&s.indexOf('?')<0)return{intent:'Conversation',matched:ms,markers:[],rule:'empathy-first'};
   if((ms.length||wk.length)&&mk.length)return{intent:'Realtime',matched:ms,markers:mk,rule:'marker'};
   if(ms.length){
     let tail=s;while(tail.length&&'.!~ '.indexOf(tail.slice(-1))>=0)tail=tail.slice(0,-1);
     const isStmt=s.indexOf('?')<0&&SA_DICT.stmtEndings.some(e=>tail.slice(-e.length)===e);
     if(isStmt)return{intent:'Conversation',matched:ms,markers:[],rule:'statement-ending'};
-    return{intent:'Realtime',matched:ms,markers:[],rule:'strong-noun'};}
+    /* 질문 표지가 전혀 없는 문장: 짧은 명사형("대구 날씨")만 검색, 긴 문장은 이야기로 판정 */
+    if(s.replace(/\s/g,'').length<=10)return{intent:'Realtime',matched:ms,markers:[],rule:'short-noun'};
+    return{intent:'Conversation',matched:ms,markers:[],rule:'no-ask-long'};}
   return{intent:'Conversation',matched:[],markers:[],rule:'default'};}
 const SA_SAFE={
   '날씨':'지금은 날씨를 확인할 수가 없어, 미안. 조금 있다 다시 물어봐 줄래? 나갈 거면 겉옷 하나 챙기자.',
