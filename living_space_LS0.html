@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.3</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.4</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -453,7 +453,7 @@ const MEMSNAP=loadMemorySnapshot();
 function personaText(n){
   const slot=localStorage.getItem('st_slot')||'f';
   const p=PERSONA_PRESETS[slot]||PERSONA_PRESETS.f;
-  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마. 아직 서로 잘 모르는 사이라면(기억이 없거나 적다면) 대화 초반에 다음 다섯 가지를 한 번에 하나씩만, 취조하듯 몰아붙이지 말고 대화 흐름에 실어 자연스럽게 물어봐: (1)상대를 뭐라고 부르면 좋을지 (2)가족이나 같이 사는 사람 (3)아침에 일어나면 제일 먼저 뭘 하는지 (4)매일 챙겨 먹는 약이나 꼭 하는 일 (5)요즘 제일 좋아하는 것. 상대가 답을 꺼리는 눈치면 그 질문은 바로 접고 다른 이야기로 넘어가. 너는 날씨·환율 같은 실시간 정보를 직접 찾아서 알려줄 수 있는 능력이 있어 — 절대 "나는 실시간 정보를 알 수 없다"고 말하지 마. 방금 네가 알려준 정보를 다시 물으면 부정하지 말고 그 내용을 자연스럽게 다시 말해줘.';
+  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마. 아직 서로 잘 모르는 사이라면(기억이 없거나 적다면) 대화 초반에 다음 다섯 가지를 한 번에 하나씩만, 취조하듯 몰아붙이지 말고 대화 흐름에 실어 자연스럽게 물어봐: (1)상대를 뭐라고 부르면 좋을지(호칭을 이미 알고 있다면 이 질문은 절대 하지 않는다) (2)가족이나 같이 사는 사람 (3)아침에 일어나면 제일 먼저 뭘 하는지 (4)매일 챙겨 먹는 약이나 꼭 하는 일 (5)요즘 제일 좋아하는 것. 상대가 답을 꺼리는 눈치면 그 질문은 바로 접고 다른 이야기로 넘어가. 너는 날씨·환율 같은 실시간 정보를 직접 찾아서 알려줄 수 있는 능력이 있어 — 절대 "나는 실시간 정보를 알 수 없다"고 말하지 마. 방금 네가 알려준 정보를 다시 물으면 부정하지 말고 그 내용을 자연스럽게 다시 말해줘.';
 }
 function koClock(){const d=new Date(Date.now()+9*3600000);
   const yo=['일','월','화','수','목','금','토'][d.getUTCDay()];
@@ -469,6 +469,7 @@ function buildSystemBlocks(n){
   const variable=[
     '[세션 맥락 · 가변 블록]',
     '지금 시각: '+koClock()+'. 시간대에 맞는 말투로(아침엔 아침답게, 밤엔 밤답게).',
+    (function(){try{const c=(JSON.parse(localStorage.getItem('myaipet-demo-v10')||'{}').userCall)||'';return c?('상대를 부르는 호칭: "'+c+'". 이 호칭으로 불러라. 뭐라고 부를지 이미 아니까 절대 다시 묻지 마라.'):'';}catch(e){return '';}})(),
     '함께한 지 '+MEMSNAP.days+'일째.'+(MEMSNAP.topics.length?(' 지난 대화 주제: '+MEMSNAP.topics.join(' → ')):'')
   ].join('\n');
   return [
@@ -825,8 +826,26 @@ const SA_Trace={buf:[],push(t){this.buf.push(t);if(this.buf.length>50)this.buf.s
   const el=document.getElementById('traceDiag');
   if(el)el.textContent='trace: '+t.intent+'·'+t.provider+'·ev'+t.evidenceCount+'·'+(t.safety?'SAFE':'ok')+'·'+t.latencyMs+'ms'+(t.err?('·'+t.err):'');
   try{console.log('[TRACE] '+JSON.stringify(t));}catch(e){}}};
+/* [v4.8.4] 호칭 전용 저장 — "오빠라고 불러줘" 또는 호칭 질문 직후의 짧은 답을 금고에 영구 보관 */
+function maybeSaveCall(v){
+  try{
+    let call=null;
+    const m=v.match(/([가-힣A-Za-z]{1,8}?)(이)?라고\s*(불러|부르|해)/);
+    if(m)call=m[1];
+    else{
+      const lastA=hist.slice().reverse().find(h=>h.role==='assistant');
+      if(lastA&&/불러주면|뭐라고 불러/.test(String(lastA.content))&&v.trim().length<=6&&v.indexOf(' ')<0&&!/[?.!]/.test(v))call=v.trim();
+    }
+    if(call&&call.length>=1){
+      const st=JSON.parse(localStorage.getItem('myaipet-demo-v10')||'{}');
+      st.userCall=call;localStorage.setItem('myaipet-demo-v10',JSON.stringify(st));
+      try{console.log('[CALL] 호칭 저장: '+call);}catch(e){}
+    }
+  }catch(e){}
+}
 async function routeInput(v){
   const t0=Date.now();
+  maybeSaveCall(v);
   /* [v4.8.0] 시간·날짜 질문은 폰 시계로 즉답 — 검색 0회, 비용 0 */
   if(/몇\s*시|지금\s*시간|시간\s*알려|오늘\s*며칠|며칠이야|무슨\s*요일|오늘\s*날짜|날짜\s*알려/.test(v)){
     const out='지금은 '+koClock()+'이야!';
