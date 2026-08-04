@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.6.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.7.0</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -648,7 +648,7 @@ const SA_SAFE={
 /* ====== WO-SRCH-002: Provider Platform Foundation (설정 = ProviderRegistry.yaml v1.0 임베드) ====== */
 const SA_CFG={defaultCity:'대구',
   selection:{weather:['weather','anthropic'],general:['anthropic']},
-  meta:{weather:{timeout:4000},anthropic:{timeout:18000},mock:{timeout:1000},nul:{timeout:500}}};
+  meta:{weather:{timeout:9000},anthropic:{timeout:18000},mock:{timeout:1000},nul:{timeout:500}}};
 const SA_WEATHER_TERMS=['날씨','기온','미세먼지','비 와','비 오','비온','우산','몇 도','몇도'];
 const SA_KPI={buf:[],rec(r){this.buf.push(r);if(this.buf.length>200)this.buf.shift();},
   report(){const B=this.buf;if(!B.length)return null;
@@ -690,6 +690,8 @@ function saAnthropicProvider(){let last=0,err=null;return{name:'anthropic',
     }catch(e){err=String(e).slice(0,40);last=Date.now()-t0;return{ok:false,evidence:[],error:err};}},
   health(){return{state:err?'DEGRADED':'UP',lastLatencyMs:last,lastError:err};},async shutdown(){}};}
 function saWeatherAdapter(){let last=0,err=null;
+  /* [v4.7.0] 창구 교체: Open-Meteo 예보 → 기상청 단기예보 2.0 (프록시 /kma 경유).
+     좌표 검색(지오코딩)만 Open-Meteo 유지(무료·무열쇠). 실패 시 2순위 anthropic이 받는다. */
   const STRIP=SA_DICT.strong.concat(SA_DICT.strongPatterns,SA_DICT.weakTime,SA_DICT.requestMarkers,['어때','와']);
   const extractCity=q=>{let x=String(q||'');
     STRIP.forEach(t=>{x=x.split(t).join(' ');});
@@ -699,7 +701,19 @@ function saWeatherAdapter(){let last=0,err=null;
     ['에서는','에서','한테','까지','부터','이랑','랑','하고','에는','에도','는','은','이','가','도','만','의','에','요'].forEach(j=>{
       if(city.length>2&&city.slice(-j.length)===j)city=city.slice(0,-j.length);});
     return city||SA_CFG.defaultCity;};
-  return{name:'weather',_extractCity:extractCity,
+  const toGrid=(lat,lon)=>{const RE=6371.00877,GRID=5.0,SLAT1=30.0,SLAT2=60.0,OLON=126.0,OLAT=38.0,XO=43,YO=136,D=Math.PI/180;
+    const re=RE/GRID,s1=SLAT1*D,s2=SLAT2*D,ol=OLON*D,oa=OLAT*D;
+    let sn=Math.tan(Math.PI*0.25+s2*0.5)/Math.tan(Math.PI*0.25+s1*0.5);
+    sn=Math.log(Math.cos(s1)/Math.cos(s2))/Math.log(sn);
+    let sf=Math.tan(Math.PI*0.25+s1*0.5);sf=Math.pow(sf,sn)*Math.cos(s1)/sn;
+    let ro=Math.tan(Math.PI*0.25+oa*0.5);ro=re*sf/Math.pow(ro,sn);
+    let ra=Math.tan(Math.PI*0.25+lat*D*0.5);ra=re*sf/Math.pow(ra,sn);
+    let th=lon*D-ol;if(th>Math.PI)th-=2*Math.PI;if(th<-Math.PI)th+=2*Math.PI;th*=sn;
+    return{nx:Math.floor(ra*Math.sin(th)+XO+0.5),ny:Math.floor(ro-ra*Math.cos(th)+YO+0.5)};};
+  const kstNow=()=>new Date(Date.now()+9*3600000); /* getUTC*로 읽으면 한국시간 */
+  const pad=n=>(n<10?'0':'')+n;
+  const ymd=d=>''+d.getUTCFullYear()+pad(d.getUTCMonth()+1)+pad(d.getUTCDate());
+  return{name:'weather',_extractCity:extractCity,_toGrid:toGrid,
   async initialize(){},
   async execute(q,ctx){const t0=Date.now();
     try{
@@ -707,13 +721,36 @@ function saWeatherAdapter(){let last=0,err=null;
       const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(city)+'&count=1&language=ko',{signal:ctx&&ctx.signal});
       const gd=await g.json();
       if(!gd.results||!gd.results.length){last=Date.now()-t0;return{ok:true,evidence:[]};}
-      const loc=gd.results[0];
-      const f=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+loc.latitude+'&longitude='+loc.longitude+'&current=temperature_2m,precipitation&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FSeoul&forecast_days=2',{signal:ctx&&ctx.signal});
-      const fd=await f.json();
-      const cur=fd.current,dl=fd.daily;
-      const txt=(loc.name||city)+' 지금 '+cur.temperature_2m+'도, 오늘 최고 '+dl.temperature_2m_max[0]+'도·최저 '+dl.temperature_2m_min[0]+'도, 내일 비 올 확률 '+dl.precipitation_probability_max[1]+'%';
+      const loc=gd.results[0],grid=toGrid(loc.latitude,loc.longitude);
+      const now=kstNow();
+      /* 실황(지금 기온): 매시 40분경 발표 → 45분 전이면 한 시간 전 발표분 */
+      let cd=new Date(now.getTime());if(cd.getUTCMinutes()<45)cd=new Date(cd.getTime()-3600000);
+      const curQ='getUltraSrtNcst?pageNo=1&numOfRows=10&dataType=JSON&base_date='+ymd(cd)+'&base_time='+pad(cd.getUTCHours())+'00&nx='+grid.nx+'&ny='+grid.ny;
+      /* 예보(최고·최저·강수확률): 02시 발표분이 하루 전체 포함 → 02:15 전이면 어제 23시 발표분 */
+      let fd_=new Date(now.getTime()),fbt='0200';
+      if(now.getUTCHours()<2||(now.getUTCHours()===2&&now.getUTCMinutes()<15)){fd_=new Date(fd_.getTime()-86400000);fbt='2300';}
+      const fcsQ='getVilageFcst?pageNo=1&numOfRows=1000&dataType=JSON&base_date='+ymd(fd_)+'&base_time='+fbt+'&nx='+grid.nx+'&ny='+grid.ny;
+      const [cr,fr]=await Promise.all([
+        fetch(PROXY+'/kma/'+curQ,{signal:ctx&&ctx.signal}),
+        fetch(PROXY+'/kma/'+fcsQ,{signal:ctx&&ctx.signal})]);
+      const cj=await cr.json(),fj=await fr.json();
+      const cit=(((cj||{}).response||{}).body||{}).items;const cList=(cit&&cit.item)||[];
+      const fit=(((fj||{}).response||{}).body||{}).items;const fList=(fit&&fit.item)||[];
+      let curT=null,tmx=null,tmn=null,pop=null;
+      cList.forEach(it=>{if(it.category==='T1H')curT=it.obsrValue;});
+      const today=ymd(now),tomo=ymd(new Date(now.getTime()+86400000));
+      fList.forEach(it=>{
+        if(it.fcstDate===today&&it.category==='TMX')tmx=parseFloat(it.fcstValue);
+        if(it.fcstDate===today&&it.category==='TMN')tmn=parseFloat(it.fcstValue);
+        if(it.fcstDate===tomo&&it.category==='POP'){const v=parseFloat(it.fcstValue);if(pop===null||v>pop)pop=v;}});
+      if(curT===null&&tmx===null){last=Date.now()-t0;return{ok:true,evidence:[]};}
+      let txt=(loc.name||city);
+      if(curT!==null)txt+=' 지금 '+curT+'도';
+      if(tmx!==null)txt+=', 오늘 최고 '+Math.round(tmx)+'도';
+      if(tmn!==null)txt+='·최저 '+Math.round(tmn)+'도';
+      if(pop!==null)txt+=', 내일 비 올 확률 '+Math.round(pop)+'%';
       last=Date.now()-t0;
-      return{ok:true,evidence:[{text:txt,source:'open-meteo',fetchedAt:Date.now()}]};
+      return{ok:true,evidence:[{text:txt,source:'kma',fetchedAt:Date.now()}]};
     }catch(e){err=String(e).slice(0,40);last=Date.now()-t0;return{ok:false,evidence:[],error:err};}},
   health(){return{state:err?'DEGRADED':'UP',lastLatencyMs:last,lastError:err};},async shutdown(){}};}
 const SA_Platform=(function(){
