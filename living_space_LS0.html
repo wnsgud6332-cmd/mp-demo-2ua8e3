@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.7.3</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.0</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -453,6 +453,10 @@ function personaText(n){
   const p=PERSONA_PRESETS[slot]||PERSONA_PRESETS.f;
   return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마. 아직 서로 잘 모르는 사이라면(기억이 없거나 적다면) 대화 초반에 다음 다섯 가지를 한 번에 하나씩만, 취조하듯 몰아붙이지 말고 대화 흐름에 실어 자연스럽게 물어봐: (1)상대를 뭐라고 부르면 좋을지 (2)가족이나 같이 사는 사람 (3)아침에 일어나면 제일 먼저 뭘 하는지 (4)매일 챙겨 먹는 약이나 꼭 하는 일 (5)요즘 제일 좋아하는 것. 상대가 답을 꺼리는 눈치면 그 질문은 바로 접고 다른 이야기로 넘어가. 너는 날씨·환율 같은 실시간 정보를 직접 찾아서 알려줄 수 있는 능력이 있어 — 절대 "나는 실시간 정보를 알 수 없다"고 말하지 마. 방금 네가 알려준 정보를 다시 물으면 부정하지 말고 그 내용을 자연스럽게 다시 말해줘.';
 }
+function koClock(){const d=new Date(Date.now()+9*3600000);
+  const yo=['일','월','화','수','목','금','토'][d.getUTCDay()];
+  let h=d.getUTCHours();const ap=h<12?'오전':'오후';h=h%12;if(h===0)h=12;
+  return (d.getUTCMonth()+1)+'월 '+d.getUTCDate()+'일 '+yo+'요일 '+ap+' '+h+'시 '+d.getUTCMinutes()+'분';}
 function buildSystemBlocks(n){
   const fixed=[
     '[persona '+PROMPT_VER+' · 고정 블록]',
@@ -462,6 +466,7 @@ function buildSystemBlocks(n){
   ].join('\n');
   const variable=[
     '[세션 맥락 · 가변 블록]',
+    '지금 시각: '+koClock()+'. 시간대에 맞는 말투로(아침엔 아침답게, 밤엔 밤답게).',
     '함께한 지 '+MEMSNAP.days+'일째.'+(MEMSNAP.topics.length?(' 지난 대화 주제: '+MEMSNAP.topics.join(' → ')):'')
   ].join('\n');
   return [
@@ -710,6 +715,10 @@ function saWeatherAdapter(){let last=0,err=null;
     let ra=Math.tan(Math.PI*0.25+lat*D*0.5);ra=re*sf/Math.pow(ra,sn);
     let th=lon*D-ol;if(th>Math.PI)th-=2*Math.PI;if(th<-Math.PI)th+=2*Math.PI;th*=sn;
     return{nx:Math.floor(ra*Math.sin(th)+XO+0.5),ny:Math.floor(ro-ra*Math.cos(th)+YO+0.5)};};
+  const DUST_RE=/미세\s*먼지|미세먼지|공기\s*질|공기질|황사/;
+  const SIDO={'서울':'서울','부산':'부산','대구':'대구','인천':'인천','광주':'광주','대전':'대전','울산':'울산','세종':'세종','수원':'경기','제주':'제주','청주':'충북','전주':'전북','포항':'경북','춘천':'강원','강릉':'강원'};
+  const g10=v=>v<=30?'좋음':v<=80?'보통':v<=150?'나쁨':'매우 나쁨';
+  const g25=v=>v<=15?'좋음':v<=35?'보통':v<=75?'나쁨':'매우 나쁨';
   /* [v4.7.2] 기상청 공식 격자 내장 사전 — 주요 도시는 외부 지오코딩을 거치지 않는다 */
   const CITY_XY={'서울':[60,127],'부산':[98,76],'대구':[89,90],'인천':[55,124],'광주':[58,74],'대전':[67,100],'울산':[102,84],'세종':[66,103],'수원':[60,121],'제주':[52,38],'청주':[69,106],'전주':[63,89],'포항':[102,94],'춘천':[73,134],'강릉':[92,131]};
   const cityDict=c=>{for(const k in CITY_XY){if(c.indexOf(k)===0)return{key:k,nx:CITY_XY[k][0],ny:CITY_XY[k][1]};}return null;};
@@ -721,6 +730,24 @@ function saWeatherAdapter(){let last=0,err=null;
   async execute(q,ctx){const t0=Date.now();
     try{
       let city=extractCity(q);
+      /* [v4.8.0] 미세먼지 질문 → 에어코리아 (프록시 /air 경유, 같은 열쇠) */
+      if(DUST_RE.test(q)){
+        const hit0=cityDict(city);if(hit0)city=hit0.key;
+        const sido=SIDO[city]||city;
+        const ar=await fetch(PROXY+'/air/getCtprvnRltmMesureDnsty?returnType=json&numOfRows=60&pageNo=1&ver=1.0&sidoName='+encodeURIComponent(sido),{signal:ctx&&ctx.signal});
+        const aj=await ar.json();
+        const items=((((aj||{}).response||{}).body||{}).items)||[];
+        let v10=null,v25=null;
+        for(const it of items){const a=parseFloat(it.pm10Value),b=parseFloat(it.pm25Value);
+          if(v10===null&&isFinite(a)&&a>=0)v10=a; if(v25===null&&isFinite(b)&&b>=0)v25=b;
+          if(v10!==null&&v25!==null)break;}
+        if(v10===null&&v25===null){last=Date.now()-t0;return{ok:true,evidence:[]};}
+        let txt=city;
+        if(v10!==null)txt+=' 미세먼지 '+g10(v10)+'(수치 '+Math.round(v10)+')';
+        if(v25!==null)txt+=(v10!==null?', ':' ')+'초미세먼지 '+g25(v25)+'(수치 '+Math.round(v25)+')';
+        last=Date.now()-t0;
+        return{ok:true,evidence:[{text:txt,source:'airkorea',fetchedAt:Date.now()}]};
+      }
       /* [v4.7.2] 1차: 내장 사전(즉답) → 2차: 외부 지오코딩(사전에 없는 지명만) */
       let grid=null;const hit=cityDict(city);
       if(hit){grid={nx:hit.nx,ny:hit.ny};city=hit.key;}
@@ -796,6 +823,16 @@ const SA_Trace={buf:[],push(t){this.buf.push(t);if(this.buf.length>50)this.buf.s
   try{console.log('[TRACE] '+JSON.stringify(t));}catch(e){}}};
 async function routeInput(v){
   const t0=Date.now();
+  /* [v4.8.0] 시간·날짜 질문은 폰 시계로 즉답 — 검색 0회, 비용 0 */
+  if(/몇\s*시|지금\s*시간|시간\s*알려|오늘\s*며칠|며칠이야|무슨\s*요일|오늘\s*날짜|날짜\s*알려/.test(v)){
+    const out='지금은 '+koClock()+'이야!';
+    const row0=bubble('pet',out,{searching:true});
+    if(row0){BL.setState(row0,'holding');setTimeout(()=>BL.destroy(row0),Math.max(25000,BL.readMs(out)+5000));}
+    hist.push({role:'user',content:v});hist.push({role:'assistant',content:out});
+    while(hist.length>12)hist.shift();
+    speak(out);
+    SA_Trace.push({intent:'Realtime',reason:'clock',matchedMarker:'',matchedStrong:'시간',dictVersion:SA_DICT_VERSION,provider:'clock',evidenceCount:1,safety:false,path:'Local',routerMs:0,providerMs:0,composerMs:0,latencyMs:Date.now()-t0,ts:t0});
+    return;}
   const route=saClassify(v);
   if(route.intent!=='Realtime'){
     SA_Trace.push({intent:'Conversation',reason:route.rule,matchedMarker:'',matchedStrong:(route.matched||[]).join('+'),dictVersion:SA_DICT_VERSION,provider:'-',evidenceCount:0,safety:false,path:'Engine',routerMs:Date.now()-t0,providerMs:0,composerMs:0,latencyMs:Date.now()-t0,ts:t0});
