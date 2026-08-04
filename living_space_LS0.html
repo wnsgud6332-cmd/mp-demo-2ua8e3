@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.0</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.1</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -481,7 +481,9 @@ async function recallGreet(){
       /* v4.6.0 첫만남 인사: 기억 0건이면 침묵 대신 펫이 먼저 호칭을 묻는다(고정 문장 — 두뇌 실패에도 안전) */
       idLog('회상: 기억 0건 — 첫만남 인사(v4.6.0)');
       const pn0=(window.IDENT&&window.IDENT.petName)||'미르';
-      const g0='왔구나! 궁금한 걸 물어봐도 되고, 오늘 있었던 일을 이야기해도 돼. 참, 내가 뭐라고 불러주면 좋을까?';
+      const _h9=new Date(Date.now()+9*3600000).getUTCHours();
+      const _lead=_h9<5?'이 시간에 잠이 안 와? 나랑 조금 이야기할래?':_h9<11?'좋은 아침이야! 오늘 하루 시작했구나.':_h9<18?'왔구나! 반가워.':_h9<22?'하루 잘 보냈어? 고생 많았어.':'늦은 시간이네 — 자기 전에 들렀구나.';
+      const g0=_lead+' 궁금한 걸 물어봐도 되고, 오늘 있었던 일을 이야기해도 돼. 참, 내가 뭐라고 불러주면 좋을까?';
       hist.push({role:'user',content:'(처음 만난 사용자가 들어왔다. 네가 먼저 인사했다.)'});
       hist.push({role:'assistant',content:g0});
       const row0=bubble('pet',g0,{searching:true});
@@ -491,7 +493,7 @@ async function recallGreet(){
       return;}
     const pn=(window.IDENT&&window.IDENT.petName)||'미르';
     idLog('회상: 인사 생성 요청 중…');
-    const ask='(사용자가 방금 다시 들어왔다. 기억 목록에서 하나만 골라 자연스럽게 언급하며 1~2문장으로 먼저 인사해라. 목록을 나열하지 말고, 기억했다/저장했다는 말도 하지 마라.)';
+    const ask='(사용자가 방금 다시 들어왔다. 기억 목록에서 하나만 골라 자연스럽게 언급하며 1~2문장으로 먼저 인사해라. 지금 시각을 인사에 반영해라 — 새벽이면 잠 걱정, 아침이면 하루 시작, 밤이면 하루 마무리 느낌으로. 목록을 나열하지 말고, 기억했다/저장했다는 말도 하지 마라.)';
     const r=await fetch(PROXY+'/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,system:buildSystemBlocks(pn),
         messages:[{role:'user',content:ask}]})});
