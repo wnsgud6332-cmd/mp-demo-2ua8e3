@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.7.0</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.7.1</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -718,10 +718,13 @@ function saWeatherAdapter(){let last=0,err=null;
   async execute(q,ctx){const t0=Date.now();
     try{
       const city=extractCity(q);
-      const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(city)+'&count=1&language=ko',{signal:ctx&&ctx.signal});
+      const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(city)+'&count=10&language=ko',{signal:ctx&&ctx.signal});
       const gd=await g.json();
       if(!gd.results||!gd.results.length){last=Date.now()-t0;return{ok:true,evidence:[]};}
-      const loc=gd.results[0],grid=toGrid(loc.latitude,loc.longitude);
+      /* [v4.7.1] 동명 지역 대비: 한국 내 후보 중 인구 최다를 선택 (대구면≠대구광역시) */
+      let cand=gd.results.filter(r=>r.country_code==='KR');if(!cand.length)cand=gd.results;
+      const loc=cand.slice().sort((a,b)=>(b.population||0)-(a.population||0))[0];
+      const grid=toGrid(loc.latitude,loc.longitude);
       const now=kstNow();
       /* 실황(지금 기온): 매시 40분경 발표 → 45분 전이면 한 시간 전 발표분 */
       let cd=new Date(now.getTime());if(cd.getUTCMinutes()<45)cd=new Date(cd.getTime()-3600000);
@@ -737,14 +740,14 @@ function saWeatherAdapter(){let last=0,err=null;
       const cit=(((cj||{}).response||{}).body||{}).items;const cList=(cit&&cit.item)||[];
       const fit=(((fj||{}).response||{}).body||{}).items;const fList=(fit&&fit.item)||[];
       let curT=null,tmx=null,tmn=null,pop=null;
-      cList.forEach(it=>{if(it.category==='T1H')curT=it.obsrValue;});
+      cList.forEach(it=>{if(it.category==='T1H'){const v=parseFloat(it.obsrValue);if(isFinite(v)&&v>-90&&v<90)curT=v;}});
       const today=ymd(now),tomo=ymd(new Date(now.getTime()+86400000));
       fList.forEach(it=>{
-        if(it.fcstDate===today&&it.category==='TMX')tmx=parseFloat(it.fcstValue);
-        if(it.fcstDate===today&&it.category==='TMN')tmn=parseFloat(it.fcstValue);
-        if(it.fcstDate===tomo&&it.category==='POP'){const v=parseFloat(it.fcstValue);if(pop===null||v>pop)pop=v;}});
+        if(it.fcstDate===today&&it.category==='TMX'){const v=parseFloat(it.fcstValue);if(isFinite(v)&&v>-90&&v<90)tmx=v;}
+        if(it.fcstDate===today&&it.category==='TMN'){const v=parseFloat(it.fcstValue);if(isFinite(v)&&v>-90&&v<90)tmn=v;}
+        if(it.fcstDate===tomo&&it.category==='POP'){const v=parseFloat(it.fcstValue);if(isFinite(v)&&v>=0&&v<=100&&(pop===null||v>pop))pop=v;}});
       if(curT===null&&tmx===null){last=Date.now()-t0;return{ok:true,evidence:[]};}
-      let txt=(loc.name||city);
+      let txt=city; /* [v4.7.1] 영문 지명(Pusan) 대신 사용자가 말한 지명 표시 */
       if(curT!==null)txt+=' 지금 '+curT+'도';
       if(tmx!==null)txt+=', 오늘 최고 '+Math.round(tmx)+'도';
       if(tmn!==null)txt+='·최저 '+Math.round(tmn)+'도';
