@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.2</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.3</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -941,37 +941,59 @@ setMode('A');
 
 /* ====== Slide Panel: Memory Map은 미르의 머릿속 ====== */
 const SP={
-  map:{title:'미르의 머릿속',sub:'미르가 당신을 이렇게 기억하고 있어요. (프로토 — 실제 기억은 본판 Engine에)',
-    html:`
-    <div class="memCat ours"><div class="mc-name">💙 우리의 이야기</div><div class="mc-recent">최근 회상 · <b>처음 이름을 지어준 날</b></div></div>
-    <div class="memCat"><div class="mc-name">❤️ 가족</div><div class="mc-recent">최근 회상 · <b>어머니 생신 이야기</b></div></div>
-    <div class="memCat"><div class="mc-name">⭐ 좋아하는 것</div><div class="mc-recent">최근 회상 · <b>앞산 소나무길 산책</b></div></div>
-    <div class="memCat"><div class="mc-name">🏥 건강</div><div class="mc-recent">최근 회상 · <b>무릎이 아팠던 날</b></div></div>
-    <div class="memCat"><div class="mc-name">☀️ 습관·일상</div><div class="mc-recent">최근 회상 · <b>아침 커피 한 잔</b></div></div>
-    <div class="memCat"><div class="mc-name">💼 일·가계</div><div class="mc-recent">최근 회상 · <b>마트 재고 정리한 날</b></div></div>
-    <div class="memCat"><div class="mc-name">📍 장소</div><div class="mc-recent">최근 회상 · <b>부산 여행</b></div></div>
-    <div class="memCat"><div class="mc-name">📦 기타</div><div class="mc-recent">최근 회상 · <b>—</b></div></div>`},
-  rel:{title:'관계 · 우리의 이야기',sub:'관계는 함께 만든 기억 위에 서 있어요. (Memory를 복제하지 않고 활용)',
-    html:`
-    <div class="memCat ours"><div class="mc-name">💙 처음 이름을 지어준 날</div><div class="mc-recent">"미르"라고 불러준 첫 순간</div></div>
-    <div class="memCat ours"><div class="mc-name">💙 오늘 처음 "고마워"라고 말해준 날</div><div class="mc-recent">함께 웃었던 저녁</div></div>
-    <div class="memCat"><div class="mc-name">지금의 기척</div><div class="mc-recent">곁에 있음 · 평온함 · 이야기하고 싶어함</div></div>`},
+  map:{title:'미르의 머릿속',sub:'미르가 당신을 이렇게 기억하고 있어요.',
+    html:()=>{ /* [v4.8.3] 실제 저장 기억(facts) 렌더 — 견본 폐기 */
+      try{
+        const st=JSON.parse(localStorage.getItem('myaipet-demo-v10')||'{}');
+        const facts=Array.isArray(st.facts)?st.facts:[];
+        if(!facts.length)return '<div class="memCat"><div class="mc-name">📦 아직 비어 있어요</div><div class="mc-recent">이야기를 나누면 여기가 채워져요.</div></div>';
+        const ICON={'가족':'❤️','건강':'🏥','좋아하는 것':'⭐','선호':'⭐','습관':'☀️','일상':'☀️','습관·일상':'☀️','일':'💼','가계':'💼','장소':'📍','우리':'💙'};
+        const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const cats={};facts.forEach(f=>{if(f&&f.t){const c=f.c||'기타';(cats[c]=cats[c]||[]).push(f.t);}});
+        return Object.keys(cats).map(c=>{
+          const ic=ICON[c]||'📦',arr=cats[c];
+          return '<div class="memCat"><div class="mc-name">'+ic+' '+esc(c)+' <small>'+arr.length+'개</small></div><div class="mc-recent">최근 회상 · <b>'+esc(arr[arr.length-1])+'</b></div></div>';
+        }).join('');
+      }catch(e){return '<div class="memCat"><div class="mc-name">📦 기억을 불러오지 못했어요</div><div class="mc-recent">'+String(e).slice(0,40)+'</div></div>';}
+    }},
+  rel:{title:'관계 · 우리의 이야기',sub:'관계는 함께 만든 기억 위에 서 있어요.',
+    html:()=>{ /* [v4.8.3] 실제 데이터 렌더 */
+      try{
+        const st=JSON.parse(localStorage.getItem('myaipet-demo-v10')||'{}');
+        const facts=Array.isArray(st.facts)?st.facts:[];
+        const pn=(window.IDENT&&window.IDENT.petName)||'PET';
+        const esc=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        let out='<div class="memCat ours"><div class="mc-name">💙 처음 이름을 지어준 날</div><div class="mc-recent">"'+esc(pn)+'"라고 불러준 첫 순간</div></div>';
+        out+='<div class="memCat"><div class="mc-name">함께한 시간</div><div class="mc-recent">'+(st.daysTogether||1)+'일째 · 함께 쌓은 기억 '+facts.length+'개</div></div>';
+        if(facts.length)out+='<div class="memCat"><div class="mc-name">가장 최근의 기억</div><div class="mc-recent">'+esc(facts[facts.length-1].t)+'</div></div>';
+        return out;
+      }catch(e){return '<div class="memCat"><div class="mc-name">불러오지 못했어요</div><div class="mc-recent">'+String(e).slice(0,40)+'</div></div>';}
+    }},
   set:{title:'설정',sub:'미르와 공간을 조정해요. (LS-1에서 항목 확정)',
     html:`
     <div class="memCat" id="ttsToggleCard" style="cursor:pointer"><div class="mc-name">🔊 목소리</div><div class="mc-recent" id="ttsState">확인 중…</div></div>
     <div class="memCat"><div class="mc-name">🌙 공간</div><div class="mc-recent">밤의 거실</div></div>
-    <div class="memCat"><div class="mc-name">⚙ 고급</div><div class="mc-recent">진단 · 초기화 (본판 전용)</div></div>`}
+    <div class="memCat" id="resetCard" style="cursor:pointer"><div class="mc-name">⚙ 고급</div><div class="mc-recent">처음부터 다시 시작 (기억·이름 초기화)</div></div>`}
 };
 let spOpen=false;
 function openPanel(kind){
   const p=SP[kind];document.getElementById('spTitle').textContent=p.title;
-  document.getElementById('spBody').innerHTML='<div class="sp-sub">'+p.sub+'</div>'+p.html;
+  const bodyHtml=(typeof p.html==='function')?p.html():p.html;
+  document.getElementById('spBody').innerHTML='<div class="sp-sub">'+p.sub+'</div>'+bodyHtml;
   if(kind==='set'){
     const st=document.getElementById('ttsState'),card=document.getElementById('ttsToggleCard');
     const paint=()=>{st.textContent=ttsOn?'켜짐 — 탭해서 끄기':'꺼짐 — 탭해서 켜기';};
     paint();
     card.onclick=()=>{ttsOn=!ttsOn;localStorage.setItem('ls_tts',ttsOn?'on':'off');paint();
       if(!ttsOn&&curAudio){try{curAudio.pause();}catch(e){}}};
+    /* [v4.8.3] 초기화: 이중 확인 → 기억·정체성 삭제 → 새 탄생으로 재시작. 목소리 설정(ls_tts)은 유지 */
+    const rc=document.getElementById('resetCard');
+    if(rc)rc.onclick=()=>{
+      if(!confirm('정말 처음부터 다시 시작할까요?\n지금까지의 기억과 이름이 모두 지워집니다.'))return;
+      if(!confirm('마지막 확인이에요 — 지운 기억은 되돌릴 수 없어요. 진행할까요?'))return;
+      try{localStorage.removeItem('myaipet-demo-v10');localStorage.removeItem('ls_identity_frozen');}catch(e){}
+      location.reload();
+    };
   }
   document.getElementById('slidePanel').classList.add('on');
   document.getElementById('panelDim').classList.add('on');spOpen=true;
