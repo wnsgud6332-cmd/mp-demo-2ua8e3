@@ -284,11 +284,11 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.2</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
-<div id="demoPanel">
+<div id="demoPanel" style="display:none">
   <button class="demoBtn" id="btnMem">회상 시연</button>
   <button class="demoBtn on" id="btnModeA">Voice A: Mic→대화</button>
   <button class="demoBtn" id="btnModeB">Voice B: PET터치→반응</button>
@@ -424,6 +424,8 @@ function bubbleMorph(row,newText,asAnswer){
    본판 localStorage 계약 개정판(GS 승인 2026-08-03, LS=주무대): facts 필드만 추가 가능(중복 제거·40건 상한 — 본판과 동일 규칙).
    정체성(petName·userName)·레벨·경험치·기타 필드는 여전히 불가침. st_slot·st_voice_map은 읽기 전용 유지. */
 const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
+/* [v4.8.2] 시험 버튼 패널은 기본 숨김 — 주소 끝에 #dev 붙이면 표시 (인터뷰 손님에게 공사 도구 노출 금지) */
+if(location.hash==='#dev'){document.addEventListener('DOMContentLoaded',()=>{const dp=document.getElementById('demoPanel');if(dp)dp.style.display='';});}
 /* ====== WO-A (Directive 2026-006): 최소 기억 연결 — persona vLS-4.4.0 ======
    A-1 주입 선별: 본판 기억지도(myaipet-demo-v10, 읽기 전용)에서 최근 20건 스냅샷 — 세션당 1회 고정(캐시 안정성)
    A-2 캐시 블록: system = [고정 블록(버전주석+페르소나+기억, cache_control)] + [가변 블록(세션 맥락)]
