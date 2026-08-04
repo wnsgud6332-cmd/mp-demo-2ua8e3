@@ -1316,7 +1316,7 @@
   function getStKey(){ return ((localStorage.getItem('st-api-key')||'').trim()) || BUILTIN_ST_KEY; }
   // [v13.3] CORS 차단 확정(진단 캡처) → Cloudflare Worker 중계 경유
   const ST_BASE = (localStorage.getItem('st_proxy')||PROXY_BASE);
-  const APP_VER = 'v17.10';
+  const APP_VER = 'v17.11';
   function stVoiceMap(){ try{ return JSON.parse(localStorage.getItem('st_voice_map')||'{}'); }catch(e){ return {}; } }
   const ST_SPEED = 1.0; // 수퍼톤 기본 속도 (필요 시 voice_settings.speed 조정)
   // [v13.1] GS 확정 프리셋 (청취 선발 완료): 슬롯 → 수퍼톤 화자명 · 모델 ssfm-30
@@ -2338,7 +2338,7 @@
     $('voicePick').style.display='none';
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'voice_selected',d:{engine:localStorage.getItem('vb00_engine'),gender:localStorage.getItem('vb00_gender')||'n'}}}));
     const v = state.petName;
-    const hello = '안녕! 나는 ' + v + '야. 만나서 반가워! 너는 이름이 뭐야?'; // [v17.10] 첫 질문은 누구나 답할 수 있는 것으로 — 열린 질문은 사람을 얼어붙게 한다(인터뷰 관찰)
+    const hello = '안녕! 나는 ' + v + '야. 궁금한 걸 물어봐도 되고, 오늘 있었던 일을 이야기해도 돼. 내가 뭐라고 불러주면 좋을까?'; // [v17.11] 정체성→용도→관계 3문장 확정(실사용 관찰+CTO 합의)
     window.__lastMood='normal';
     addMsg(hello, 'pet'); showBubble(hello); speak(hello);
     document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'first_chat_started'}}));

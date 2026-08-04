@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.6.0</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.6.1</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -430,7 +430,7 @@ const PROXY='https://mp-proxy.wnsgud6332.workers.dev';
    A-3 재진입 회상: 입장 시 저장 기억 기반 선(先)인사 — recallGreet()
    A-4 프롬프트 버전 주석: PROMPT_VER — 고정 블록 첫 줄 표기
    ③B 그릇(GS 확정 2026-08-03): 슬롯별 말투 분기 — A안 확정 형용사만 사용, 성격 문안 확장 자리. 반말/존댓말 배정은 인터뷰 후. */
-const PROMPT_VER='vLS-4.6.0';
+const PROMPT_VER='vLS-4.6.1';
 const PERSONA_PRESETS={
   f:{label:'햇살이',tone:'밝고 명랑한 기운으로'},
   m:{label:'씩씩이',tone:'또랑또랑 기운찬 기세로'},
@@ -476,7 +476,7 @@ async function recallGreet(){
       /* v4.6.0 첫만남 인사: 기억 0건이면 침묵 대신 펫이 먼저 호칭을 묻는다(고정 문장 — 두뇌 실패에도 안전) */
       idLog('회상: 기억 0건 — 첫만남 인사(v4.6.0)');
       const pn0=(window.IDENT&&window.IDENT.petName)||'미르';
-      const g0='왔구나! 반가워. 있잖아, 너를 뭐라고 부르면 좋을까?';
+      const g0='왔구나! 궁금한 걸 물어봐도 되고, 오늘 있었던 일을 이야기해도 돼. 참, 내가 뭐라고 불러주면 좋을까?';
       hist.push({role:'user',content:'(처음 만난 사용자가 들어왔다. 네가 먼저 인사했다.)'});
       hist.push({role:'assistant',content:g0});
       const row0=bubble('pet',g0,{searching:true});
@@ -1199,7 +1199,7 @@ function readBrainGreeting(name){
     }
   }catch(e){}
   /* 폴백: 본판 v16.0 PRS-001D M1 확정 인사 문구의 재표기(렌더러는 생성하지 않는다) */
-  return '안녕! 나는 '+name+'야. 만나서 반가워! 너는 이름이 뭐야?';
+  return '안녕! 나는 '+name+'야. 궁금한 걸 물어봐도 되고, 오늘 있었던 일을 이야기해도 돼. 내가 뭐라고 불러주면 좋을까?';
 }
 function splitGreeting(g){
   const m=g.match(/^(.{1,14}?[!.?…~])[ ]*/);
