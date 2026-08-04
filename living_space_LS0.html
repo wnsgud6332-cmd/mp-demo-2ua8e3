@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.6</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.8.7</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -353,6 +353,8 @@ const BL={pendingUsers:[],ttsWaiters:[],
   readMs(t){return Math.min(90000, 12000 + String(t||'').length*250);}, /* [v4.8.5] 어르신 읽기 속도 기준 상향(조카 피드백: 너무 빨리 사라짐) */
   setState(row,st){row.dataset.state=st;},
   destroy(row){if(!row||row.dataset.state==='fadeout'||row.dataset.state==='destroyed')return;
+    /* [v4.8.7] 짝 동반 퇴장: 답변이 사라질 때 묶인 질문도 같은 순간 함께 사라진다 */
+    try{(row._paired||[]).forEach(u=>BL.destroy(u));}catch(e){}
     this.setState(row,'fadeout');row.classList.add('fade');
     setTimeout(()=>{this.setState(row,'destroyed');try{row.remove();}catch(e){}
       if(!conv.children.length){document.documentElement.classList.add('convIdle');
@@ -382,8 +384,8 @@ function bubble(kind,text,opt){
     const born=Date.now();
     row._answered=null;
     row._resolveUser=()=>{ if(row._answered==null)return;
-      /* [v4.8.6] 질문은 답변과 짝으로 산다 — 답변 읽기 시간 + 여유만큼 함께 유지 */
-      const dieAt=Math.max(born+8000, row._answered+(row._holdMs||2000)+15000);
+      /* [v4.8.7] 질문의 자체 타이머는 최후 보루 — 평소엔 답변 소멸 시 짝 끈이 먼저 데려간다 */
+      const dieAt=Math.max(born+8000, row._answered+(row._holdMs||2000)+60000);
       setTimeout(()=>BL.destroy(row), Math.max(0,dieAt-Date.now()));};
     BL.pendingUsers.push(row);
     return row;
@@ -397,8 +399,10 @@ function petAnswerLifecycle(row,textShown){
   /* Context: 이 답변이 대기 중 질문들을 해소 → 질문 삭제 타이머 가동 */
   const now=Date.now();
   const rMs=BL.readMs(textShown);
-  BL.pendingUsers.forEach(u=>{if(u._answered==null){u._answered=now;u._holdMs=rMs;u._resolveUser();}});
+  const paired=[];
+  BL.pendingUsers.forEach(u=>{if(u._answered==null){u._answered=now;u._holdMs=rMs;paired.push(u);u._resolveUser();}});
   BL.pendingUsers=BL.pendingUsers.filter(u=>u._answered==null);
+  row._paired=paired; /* [v4.8.7] 이 답변이 해소한 질문들 — 함께 퇴장 */
   if(ttsOn){
     /* [v4.8.6] Speech: TTS 종료 후에도 읽기 시간만큼 유지(듣고 나서 눈으로 다시 읽는 시간) */
     BL.setState(row,'speaking');
