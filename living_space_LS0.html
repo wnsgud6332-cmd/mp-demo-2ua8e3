@@ -284,7 +284,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.7.1</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.7.2</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -710,6 +710,9 @@ function saWeatherAdapter(){let last=0,err=null;
     let ra=Math.tan(Math.PI*0.25+lat*D*0.5);ra=re*sf/Math.pow(ra,sn);
     let th=lon*D-ol;if(th>Math.PI)th-=2*Math.PI;if(th<-Math.PI)th+=2*Math.PI;th*=sn;
     return{nx:Math.floor(ra*Math.sin(th)+XO+0.5),ny:Math.floor(ro-ra*Math.cos(th)+YO+0.5)};};
+  /* [v4.7.2] 기상청 공식 격자 내장 사전 — 주요 도시는 외부 지오코딩을 거치지 않는다 */
+  const CITY_XY={'서울':[60,127],'부산':[98,76],'대구':[89,90],'인천':[55,124],'광주':[58,74],'대전':[67,100],'울산':[102,84],'세종':[66,103],'수원':[60,121],'제주':[52,38],'청주':[69,106],'전주':[63,89],'포항':[102,94],'춘천':[73,134],'강릉':[92,131]};
+  const cityDict=c=>{for(const k in CITY_XY){if(c.indexOf(k)===0)return{key:k,nx:CITY_XY[k][0],ny:CITY_XY[k][1]};}return null;};
   const kstNow=()=>new Date(Date.now()+9*3600000); /* getUTC*로 읽으면 한국시간 */
   const pad=n=>(n<10?'0':'')+n;
   const ymd=d=>''+d.getUTCFullYear()+pad(d.getUTCMonth()+1)+pad(d.getUTCDate());
@@ -717,14 +720,18 @@ function saWeatherAdapter(){let last=0,err=null;
   async initialize(){},
   async execute(q,ctx){const t0=Date.now();
     try{
-      const city=extractCity(q);
-      const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(city)+'&count=10&language=ko',{signal:ctx&&ctx.signal});
-      const gd=await g.json();
-      if(!gd.results||!gd.results.length){last=Date.now()-t0;return{ok:true,evidence:[]};}
-      /* [v4.7.1] 동명 지역 대비: 한국 내 후보 중 인구 최다를 선택 (대구면≠대구광역시) */
-      let cand=gd.results.filter(r=>r.country_code==='KR');if(!cand.length)cand=gd.results;
-      const loc=cand.slice().sort((a,b)=>(b.population||0)-(a.population||0))[0];
-      const grid=toGrid(loc.latitude,loc.longitude);
+      let city=extractCity(q);
+      /* [v4.7.2] 1차: 내장 사전(즉답) → 2차: 외부 지오코딩(사전에 없는 지명만) */
+      let grid=null;const hit=cityDict(city);
+      if(hit){grid={nx:hit.nx,ny:hit.ny};city=hit.key;}
+      else{
+        const g=await fetch('https://geocoding-api.open-meteo.com/v1/search?name='+encodeURIComponent(city)+'&count=10&language=ko',{signal:ctx&&ctx.signal});
+        const gd=await g.json();
+        if(!gd.results||!gd.results.length){last=Date.now()-t0;return{ok:true,evidence:[]};}
+        let cand=gd.results.filter(r=>r.country_code==='KR');if(!cand.length)cand=gd.results;
+        const loc=cand.slice().sort((a,b)=>(b.population||0)-(a.population||0))[0];
+        grid=toGrid(loc.latitude,loc.longitude);
+      }
       const now=kstNow();
       /* 실황(지금 기온): 매시 40분경 발표 → 45분 전이면 한 시간 전 발표분 */
       let cd=new Date(now.getTime());if(cd.getUTCMinutes()<45)cd=new Date(cd.getTime()-3600000);
