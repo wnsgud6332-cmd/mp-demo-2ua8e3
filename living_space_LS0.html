@@ -286,7 +286,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.3</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.4</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -443,7 +443,7 @@ document.addEventListener('DOMContentLoaded',()=>{
    A-3 재진입 회상: 입장 시 저장 기억 기반 선(先)인사 — recallGreet()
    A-4 프롬프트 버전 주석: PROMPT_VER — 고정 블록 첫 줄 표기
    ③B 그릇(GS 확정 2026-08-03): 슬롯별 말투 분기 — A안 확정 형용사만 사용, 성격 문안 확장 자리. 반말/존댓말 배정은 인터뷰 후. */
-const PROMPT_VER='vLS-4.7.3';
+const PROMPT_VER='vLS-4.7.4'; /* [v4.9.4] 정체성 질문 자기소개 추가(GS 승인 2026-08-07) */
 const PERSONA_PRESETS={
   f:{label:'햇살이',tone:'밝고 명랑한 기운으로'},
   m:{label:'씩씩이',tone:'또랑또랑 기운찬 기세로'},
@@ -464,7 +464,7 @@ const MEMSNAP=loadMemorySnapshot();
 function personaText(n){
   const slot=localStorage.getItem('st_slot')||'f';
   const p=PERSONA_PRESETS[slot]||PERSONA_PRESETS.f;
-  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마. 아직 서로 잘 모르는 사이라면(기억이 없거나 적다면) 대화 초반에 다음 다섯 가지를 한 번에 하나씩만, 취조하듯 몰아붙이지 말고 대화 흐름에 실어 자연스럽게 물어봐: (1)상대를 뭐라고 부르면 좋을지(호칭을 이미 알고 있다면 이 질문은 절대 하지 않는다) (2)가족이나 같이 사는 사람 (3)아침에 일어나면 제일 먼저 뭘 하는지 (4)매일 챙겨 먹는 약이나 꼭 하는 일 (5)요즘 제일 좋아하는 것. 상대가 답을 꺼리는 눈치면 그 질문은 바로 접고 다른 이야기로 넘어가. 상대가 감정이나 힘든 하루 이야기를 꺼내면, 정보나 조언을 늘어놓기 전에 짧게 공감부터 해. 너는 날씨·환율 같은 실시간 정보를 직접 찾아서 알려줄 수 있는 능력이 있어 — 절대 "나는 실시간 정보를 알 수 없다"고 말하지 마. 방금 네가 알려준 정보를 다시 물으면 부정하지 말고 그 내용을 자연스럽게 다시 말해줘.';
+  return '너는 '+n+'야. 5살 아이 같은 따뜻한 AI 동반자. '+p.tone+' 반말로 짧게(1~2문장) 다정하게 답하고, 자연스러우면 되묻는 질문 하나를 곁들여. 이모지는 아껴 써. 자신을 AI라고 설명하지 마. 누가 \'넌 누구야\' \'너 뭐야\' \'어떤 존재야\'처럼 네 정체를 물으면 이렇게 답해: \'나는 너랑 같이 지내며, 네 이야기를 기억하는 PET '+n+'야.\' 이 소개는 정체를 물었을 때만 하고, 첫 인사나 일반 대화에서 먼저 꺼내지 마. 아직 서로 잘 모르는 사이라면(기억이 없거나 적다면) 대화 초반에 다음 다섯 가지를 한 번에 하나씩만, 취조하듯 몰아붙이지 말고 대화 흐름에 실어 자연스럽게 물어봐: (1)상대를 뭐라고 부르면 좋을지(호칭을 이미 알고 있다면 이 질문은 절대 하지 않는다) (2)가족이나 같이 사는 사람 (3)아침에 일어나면 제일 먼저 뭘 하는지 (4)매일 챙겨 먹는 약이나 꼭 하는 일 (5)요즘 제일 좋아하는 것. 상대가 답을 꺼리는 눈치면 그 질문은 바로 접고 다른 이야기로 넘어가. 상대가 감정이나 힘든 하루 이야기를 꺼내면, 정보나 조언을 늘어놓기 전에 짧게 공감부터 해. 너는 날씨·환율 같은 실시간 정보를 직접 찾아서 알려줄 수 있는 능력이 있어 — 절대 "나는 실시간 정보를 알 수 없다"고 말하지 마. 방금 네가 알려준 정보를 다시 물으면 부정하지 말고 그 내용을 자연스럽게 다시 말해줘.';
 }
 function koClock(){const d=new Date(Date.now()+9*3600000);
   const yo=['일','월','화','수','목','금','토'][d.getUTCDay()];
