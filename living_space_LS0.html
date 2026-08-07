@@ -55,9 +55,9 @@ html,body{height:100%;overflow:hidden;font-family:-apple-system,'Apple SD Gothic
 html.petHidden #petAnchor{opacity:0;pointer-events:none;transition:opacity .5s}
 
 /* ---- Context Panel: 기능 메뉴가 아니라 PET 상태 패널 ---- */
-#ctxPanel{position:absolute;right:calc(20px + var(--pa-right));top:calc(var(--pa-top) + 52px);
+#ctxPanel{position:absolute;right:calc(28px + var(--pa-right));top:calc(var(--pa-top) + 52px);
   display:flex;flex-direction:column;gap:13px;max-width:38%;align-items:flex-end;
-  background:rgba(18,11,7,.42);border:1px solid rgba(255,240,225,.08);border-radius:14px;
+  background:rgba(18,11,7,.55);border:1px solid rgba(255,240,225,.16);border-radius:14px;
   padding:12px 14px;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);} /* [v4.9.2] 검증 리포트: 정보 발견성 — 배경 카드+크기/농도 상향(최종 농도는 GS 판정) */
 .ls-item{text-align:right;color:rgba(255,240,225,.95);pointer-events:none}
 .ls-title{font-size:14px;letter-spacing:.05em;display:flex;align-items:center;justify-content:flex-end;gap:6px}
@@ -78,7 +78,7 @@ html.petHidden #petAnchor{opacity:0;pointer-events:none;transition:opacity .5s}
 #moreGroup.open{display:flex}
 .ctxItem{font-size:12.5px;color:rgba(255,240,225,.55);cursor:pointer;text-align:right}
 .ctxItem small{display:block;font-size:9.5px;color:rgba(255,240,225,.22);margin-top:1px}
-html.convOn #ctxPanel{opacity:.25;transition:opacity .4s}
+html.convOn #ctxPanel{opacity:.85;transition:opacity .4s} /* [v4.9.3] 대화 중 25% 흐림이 배경 카드째 지우던 근본 원인 수정 */
 html.pa-kb-open #ctxPanel{opacity:0;transition:opacity .2s}
 
 /* ---- Phase 2 · Conversation Layer: 메신저가 아니라 공간의 층 ---- */
@@ -286,7 +286,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.2</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.3</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
