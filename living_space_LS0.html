@@ -286,7 +286,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.4</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.5</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -534,7 +534,7 @@ async function extractAndStore(userText){
   try{
     const r=await fetch(PROXY+'/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:200,
-        system:'사용자 발화에서 장기적으로 기억할 가치가 있는 새 사실만 뽑아라. 최대 2개, 없으면 빈 배열. JSON 배열만 출력하고 다른 텍스트 금지: [{"fact":"사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}]',
+        system:'오늘은 '+(new Date().getMonth()+1)+'월 '+new Date().getDate()+'일이다. 사용자 발화에서 기억할 가치가 있는 새 사실만 뽑아라. 두 종류다. (1)오래 유지되는 사실: 취향·습관·가족·건강·일·장소. (2)오늘의 사건: 사용자가 직접 말한 오늘 있었던 일 중 이후 대화를 이어갈 수 있는 것(산 것, 한 일, 만난 사람, 간 곳, 감정이 동반된 일) — fact 문장에 오늘 날짜를 넣어 기록해라(예: "8월 7일 딸기를 샀다"). 단순 인사·명령·질문(날씨 확인 등)·일시적 요청은 저장하지 마라. 사건 하나로 취향을 추론하지 마라: "오늘 딸기를 샀어"는 구매 사건으로만 기록하고 "딸기를 좋아한다"로 바꾸지 마라. 최대 2개, 없으면 빈 배열. JSON 배열만 출력하고 다른 텍스트 금지: [{"fact":"사실 한 문장","category":"가족·사람|건강|습관·일상|좋아하는 것|일·가게|장소|기타 중 하나"}]', /* [v4.9.5] L1 사건 기억 확장(설계서 3장·4장 U등급, GS 승인 08-07). 범위: 추출 프롬프트 한정 */
         messages:[{role:'user',content:userText}]})});
     if(!r.ok)return;
     const d=await r.json();
