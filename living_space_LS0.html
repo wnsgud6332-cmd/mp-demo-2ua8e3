@@ -237,6 +237,30 @@ html.doorPush #camera{transform:scale(1.05)}
   font-size:10.5px;line-height:1.5;background:rgba(0,0,0,.62);color:#9fe8c0;
   border:1px solid rgba(159,232,192,.3);font-family:ui-monospace,monospace;white-space:pre;}
 html.pa-diag #paBadge{display:block}
+
+/* [v4.9.8] 모바일 요약형 상태 패널 — 정식 반응형 1단계
+   기본 접힘: 제목+상태점만 노출 → PET 얼굴/눈 확보. 탭하면 설명문·기억지도 제자리 펼침.
+   폭 기준(사파리 조준 아님) → 아이폰 사파리·크롬·안드로이드 모두 커버. safe-area 대응. */
+@media (max-width:600px){
+  #ctxPanel{
+    right:calc(10px + var(--pa-right) + env(safe-area-inset-right,0px));
+    top:calc(var(--pa-top) + 40px + env(safe-area-inset-top,0px));
+    gap:6px;padding:8px 10px;border-radius:12px;cursor:pointer;}
+  /* 접힘(기본): 설명문·기억지도·더보기 숨김 → 상태 3개 제목만 */
+  #ctxPanel:not(.expanded){max-width:34%;}
+  #ctxPanel:not(.expanded) .ls-sub,
+  #ctxPanel:not(.expanded) #memChip,
+  #ctxPanel:not(.expanded) #foldBtn,
+  #ctxPanel:not(.expanded) #moreGroup{display:none;}
+  #ctxPanel:not(.expanded) .ls-title{font-size:13px;}
+  #ctxPanel:not(.expanded) .ls-item:first-child .ls-title::after{content:'\2335';margin-left:5px;color:rgba(255,240,225,.4);font-size:11px;}
+  /* 펼침(탭 후): 상세 표시 */
+  #ctxPanel.expanded{max-width:52%;}
+  #ctxPanel.expanded .ls-title{font-size:13px;}
+  #ctxPanel.expanded .ls-sub{font-size:12px;line-height:1.35;}
+  #ctxPanel.expanded #memChip{font-size:12px;}
+  #ctxPanel.expanded #foldBtn{font-size:11px;}
+}
 </style>
 </head>
 <body>
@@ -286,7 +310,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.6</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.8</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -942,6 +966,12 @@ const mc=document.getElementById('memoryCard');
 document.getElementById('foldBtn').onclick=function(){
   const g=document.getElementById('moreGroup');g.classList.toggle('open');
   this.textContent=g.classList.contains('open')?'▴ 접기':'▾ 더보기';};
+/* [v4.9.8] 모바일 요약 패널 탭 펼침/접힘 (폭 기준, 폰에서만; 기존 버튼 동작 보존) */
+(function(){var cp=document.getElementById('ctxPanel');if(!cp)return;
+  cp.addEventListener('click',function(e){
+    if(!window.matchMedia('(max-width:600px)').matches)return;
+    if(e.target.closest('#memChip,#foldBtn,.ctxItem'))return;
+    cp.classList.toggle('expanded');});})();
 document.getElementById('btnMem').onclick=()=>{
   const chip=document.getElementById('memChip');
   chip.classList.add('hot');setTimeout(()=>chip.classList.remove('hot'),5200);
