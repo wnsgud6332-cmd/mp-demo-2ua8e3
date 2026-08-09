@@ -253,10 +253,22 @@ html.pa-diag #paBadge{display:block}
   #ctxPanel #moreGroup,
   #ctxPanel .ctxDivider{display:none;}
   #ctxPanel .ls-title{font-size:13px;}
-  /* 첫 대화문: 아바타+말풍선+시간 포함 행 전체를 패널 왼쪽으로 제한 */
-  #conv .msgRow.pet{max-width:55%;}
+  /* 첫 대화문: 아바타+말풍선+시간 포함 행 전체를 패널 왼쪽으로 제한
+     [9-b] 55%는 과도(세로로 길어짐) → 68%로 완화. 접힘 패널은 상단·짧아 겹침 재발 없음 */
+  #conv .msgRow.pet{max-width:68%;}
   #conv .msgRow.pet .bub{max-width:100%;}
-  #conv .bub.pet{max-width:55%;}
+  #conv .bub.pet{max-width:68%;}
+  /* [9-b] B방식: 상태 상자가 곧 문 — 탭 대상임을 표시 */
+  #ctxPanel{cursor:pointer;}
+  /* [9-b] 상세는 하단 시트: 기존 #slidePanel을 우측 슬라이드 → 하단 시트로 전환.
+     콘텐츠·openPanel/closePanel·배경탭 닫기 전부 보존, 배치만 변경. 하단 safe-area 1회. */
+  #slidePanel{
+    top:auto;left:0;right:0;bottom:0;width:100%;max-height:70vh;max-height:70dvh;
+    border-left:none;border-top:1px solid rgba(255,220,180,.16);
+    border-radius:18px 18px 0 0;
+    padding:16px 18px calc(18px + env(safe-area-inset-bottom,0px));
+    transform:translateY(105%);}
+  #slidePanel.on{transform:translateY(0);}
 }
 </style>
 </head>
@@ -307,7 +319,7 @@ html.pa-diag #paBadge{display:block}
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.9a</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.9</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -1081,6 +1093,11 @@ const _openFromCard=e=>{e.preventDefault();mc.classList.remove('show');openPanel
 mc.addEventListener('click',_openFromCard);mc.addEventListener('touchstart',_openFromCard); // 진입로 ①
 document.querySelectorAll('.ctxItem').forEach(el=>{
   el.onclick=()=>openPanel(el.textContent.includes('관계')?'rel':'set');});
+/* [v4.9.9 · 9-b] B방식 진입: 모바일에서 상태 상자 탭 → 하단 시트(기억 지도) */
+document.getElementById('ctxPanel').addEventListener('click',function(e){
+  if(!window.matchMedia('(max-width:600px)').matches)return;
+  if(e.target.closest('#memChip,#foldBtn,.ctxItem'))return;
+  openPanel('map');});
 
 /* ====== Test 5: PET 숨기기 — 공간만으로 살아있는가 ====== */
 document.getElementById('btnHide').onclick=function(){
@@ -1118,7 +1135,9 @@ const PA={device:'unknown',os:'unknown',caps:{},
   kb(){if(!window.visualViewport)return;const vv=window.visualViewport;
     const u=()=>{const kb=Math.max(0,innerHeight-vv.height-vv.offsetTop);
       document.documentElement.style.setProperty('--pa-kb',kb+'px');
-      document.documentElement.classList.toggle('pa-kb-open',kb>60);this.badge();};
+      document.documentElement.classList.toggle('pa-kb-open',kb>60);
+      if(kb>60&&typeof spOpen!=='undefined'&&spOpen){closePanel();} /* [9-b] 키보드 열림 → 상세 시트 자동 닫힘 */
+      this.badge();};
     vv.addEventListener('resize',u);vv.addEventListener('scroll',u);u();},
   nav(){if(this.os!=='Android')return;history.pushState({pa:1},'');
     window.addEventListener('popstate',()=>{history.pushState({pa:1},'');
