@@ -157,6 +157,10 @@ html.pa-fold-closed{--pet-w:min(62vw,300px)}
 #slidePanel::-webkit-scrollbar{display:none}
 #slidePanel.on{transform:translateX(0)}
 .sp-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+#spNav{display:none;gap:6px;margin-bottom:12px}
+.spTab{flex:1;padding:7px 4px;font:inherit;font-size:12px;color:rgba(255,240,225,.45);
+  background:rgba(255,240,225,.05);border:1px solid rgba(255,220,180,.12);border-radius:8px;cursor:pointer}
+.spTab.on{color:rgba(255,244,232,.92);background:rgba(255,220,180,.14);border-color:rgba(255,220,180,.3)}
 .sp-title{font-size:15px;letter-spacing:.06em;color:rgba(255,240,225,.85)}
 .sp-close{background:none;border:none;color:rgba(255,240,225,.5);font-size:18px;cursor:pointer;padding:4px}
 .sp-sub{font-size:11px;color:rgba(255,240,225,.4);margin-bottom:14px;line-height:1.5}
@@ -269,6 +273,8 @@ html.pa-diag #paBadge{display:block}
     padding:16px 18px calc(18px + env(safe-area-inset-bottom,0px));
     transform:translateY(105%);}
   #slidePanel.on{transform:translateY(0);}
+  /* [9-c] 세 진입로 복원: 시트 내부 탭 3개. #spBody 밖이므로 내용 교체에 사라지지 않음 */
+  #spNav{display:flex;}
 }
 </style>
 </head>
@@ -288,7 +294,7 @@ html.pa-diag #paBadge{display:block}
   </div></div></div>
 
   <div id="ctxPanel">
-    <div class="ls-item"><div class="ls-title">존재감 <span class="ls-dot"></span></div><div class="ls-sub">미르가 당신을 바라보고 있어요</div></div>
+    <div class="ls-item"><div class="ls-title">존재감 <span class="ls-dot"></span></div><div class="ls-sub"></div></div>
     <div class="ls-item"><div class="ls-title">기분 <span class="ls-dot"></span></div><div class="ls-sub">평온해 보여요</div></div>
     <div class="ls-item"><div class="ls-title">대화 의지 <span class="ls-dot"></span></div><div class="ls-sub">이야기하고 싶어해요</div></div>
     <div class="ctxDivider"></div>
@@ -305,7 +311,7 @@ html.pa-diag #paBadge{display:block}
 </div></div>
 
 <div id="doorL"></div><div id="doorR"></div><div id="doorSeam"></div>
-<div id="header">미르</div>
+<div id="header"></div>
 <div id="conv"></div>
 <div id="inputBar">
   <button class="roundBtn" id="micBtn">🎙</button>
@@ -316,10 +322,11 @@ html.pa-diag #paBadge{display:block}
 <div id="panelDim"></div>
 <div id="slidePanel">
   <div class="sp-head"><div class="sp-title" id="spTitle"></div><button class="sp-close" id="spClose">✕</button></div>
+  <div id="spNav"><button class="spTab" data-k="map">기억 지도</button><button class="spTab" data-k="rel">우리 사이</button><button class="spTab" data-k="set">설정</button></div>
   <div id="spBody"></div>
 </div>
 
-<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.9</div>
+<div id="verTag" style="position:fixed;left:8px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,255,255,.35);font-family:monospace">LS v4.9.11</div>
 <div id="idDiag"></div><div id="traceDiag"></div>
 <div id="voiceDiag" style="position:fixed;left:70px;bottom:6px;z-index:98;font-size:9px;color:rgba(255,220,160,.55);font-family:monospace"></div>
 <div id="paBadge"></div>
@@ -522,12 +529,12 @@ function buildSystemBlocks(n){
   ];
 }
 async function recallGreet(){
+  if(petName()===null){idLog('이름 미확정 — 인사 생성 금지');return;}
   try{
     idLog('회상: 기억 '+MEMSNAP.count+'건 로드');
     if(!MEMSNAP.count){
       /* v4.6.0 첫만남 인사: 기억 0건이면 침묵 대신 펫이 먼저 호칭을 묻는다(고정 문장 — 두뇌 실패에도 안전) */
       idLog('회상: 기억 0건 — 첫만남 인사(v4.6.0)');
-      const pn0=(window.IDENT&&window.IDENT.petName)||'미르';
       const _h9=new Date(Date.now()+9*3600000).getUTCHours();
       const _lead=_h9<5?'이 시간에 잠이 안 와? 나랑 조금 이야기할래?':_h9<11?'좋은 아침이야! 오늘 하루 시작했구나.':_h9<18?'왔구나! 반가워.':_h9<22?'하루 잘 보냈어? 고생 많았어.':'늦은 시간이네 — 자기 전에 들렀구나.';
       let _call='';try{_call=(JSON.parse(localStorage.getItem('myaipet-demo-v10')||'{}').userCall)||'';}catch(e){}
@@ -540,7 +547,7 @@ async function recallGreet(){
       speak(g0);
       document.dispatchEvent(new CustomEvent('mp-evidence',{detail:{t:'first_greet',d:{ver:PROMPT_VER}}}));
       return;}
-    const pn=(window.IDENT&&window.IDENT.petName)||'미르';
+    const pn=petName();
     idLog('회상: 인사 생성 요청 중…');
     const ask='(사용자가 방금 다시 들어왔다. 기억 목록에서 하나만 골라 자연스럽게 언급하며 1~2문장으로 먼저 인사해라. 지금 시각을 인사에 반영해라 — 새벽이면 잠 걱정, 아침이면 하루 시작, 밤이면 하루 마무리 느낌으로. 목록을 나열하지 말고, 기억했다/저장했다는 말도 하지 마라.)';
     const r=await fetch(PROXY+'/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -660,6 +667,9 @@ window.addEventListener('pointerdown',()=>{
     curAudio.play().then(()=>vDiag('재생중(해제됨)')).catch(e=>vDiag('재시도실패 '+e.name));}
 },true);
 async function brain(userText){
+  if(petName()===null){ /* [v4.9.11] 이름 미확정: LLM 호출·대화 생성 금지 → Gateway 재판정 */
+    idLog('이름 미확정 — 대화 차단, Gateway 재판정 요청');
+    IdentityBoot(); return;}
   hist.push({role:'user',content:userText});
   while(hist.length>12)hist.shift();
   const th=document.createElement('div');th.className='msgRow pet in';
@@ -670,7 +680,7 @@ async function brain(userText){
   try{
     const r=await fetch(PROXY+'/v1/messages',{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,system:buildSystemBlocks((window.IDENT&&window.IDENT.petName)||'미르'),messages:hist})});
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:300,system:buildSystemBlocks(petName()),messages:hist})});
     if(!r.ok)throw new Error('http '+r.status);
     const d=await r.json();
     const reply=(d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join(' ').trim()||'…';
@@ -1021,7 +1031,7 @@ document.getElementById('petHit').onclick=()=>{
   setTimeout(()=>bubble('pet',mode==='B'?'(B안) 불렀어? 이야기하자.':'히힛, 간지러워.'),350);};
 setMode('A');
 
-/* ====== Slide Panel: Memory Map은 미르의 머릿속 ====== */
+/* ====== Slide Panel: Memory Map = PET의 머릿속 ====== */
 const SP={
   map:{title:()=>(((window.IDENT&&window.IDENT.petName)||'PET')+'의 머릿속'),sub:()=>(((window.IDENT&&window.IDENT.petName)||'PET')+'가 당신을 이렇게 기억하고 있어요.'),
     html:()=>{ /* [v4.8.3] 실제 저장 기억(facts) 렌더 — 견본 폐기 */
@@ -1079,6 +1089,7 @@ function openPanel(kind){
       location.reload();
     };
   }
+  document.querySelectorAll('.spTab').forEach(b=>b.classList.toggle('on',b.dataset.k===kind));
   document.getElementById('slidePanel').classList.add('on');
   document.getElementById('panelDim').classList.add('on');spOpen=true;
 }
@@ -1088,6 +1099,9 @@ function closePanel(){
 }
 document.getElementById('spClose').onclick=closePanel;
 document.getElementById('panelDim').onclick=closePanel;
+/* [9-c] 탭 전환 — 기존 openPanel 재사용. 시트는 닫히지 않는다 */
+document.querySelectorAll('.spTab').forEach(b=>{
+  b.onclick=e=>{e.stopPropagation();openPanel(b.dataset.k);};});
 document.getElementById('memChip').onclick=()=>openPanel('map');          // 진입로 ②
 const _openFromCard=e=>{e.preventDefault();mc.classList.remove('show');openPanel('map');};
 mc.addEventListener('click',_openFromCard);mc.addEventListener('touchstart',_openFromCard); // 진입로 ①
@@ -1437,6 +1451,10 @@ function firstEncounter(name){
       ci2.removeEventListener('focus',dismiss);sb2.removeEventListener('click',dismiss);};
     ci2.addEventListener('focus',dismiss);sb2.addEventListener('click',dismiss);
   },8800);
+}
+function petName(){ /* [v4.9.11] 읽기 전용. 판정하지 않는다. 없으면 null */
+  const value=window.IDENT&&window.IDENT.petName;
+  return typeof value==='string'&&value.trim()?value.trim():null;
 }
 function applyIdentity(id){  // 입장: 렌더러에 이름 반영
   window.IDENT=id;
